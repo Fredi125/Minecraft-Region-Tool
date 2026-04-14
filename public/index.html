@@ -1,0 +1,2008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>MC Region Placement Tool</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg0:#0d1117;--bg1:#161b22;--bg2:#21262d;
+  --border:#30363d;--border2:#484f58;
+  --text:#e6edf3;--muted:#8b949e;--dim:#484f58;
+  --blue:#58a6ff;--green:#3fb950;--red:#f85149;
+  --warn:#f59e0b;--purple:#bc8cff;
+  --r:8px;
+}
+body{background:var(--bg0);color:var(--text);font-family:'JetBrains Mono','Fira Code','Courier New',monospace;font-size:13px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ─── Toolbar ─── */
+#toolbar{background:var(--bg1);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+#toolbar h1{font-size:13px;color:var(--blue);margin-right:4px;white-space:nowrap}
+.sep{width:1px;height:20px;background:var(--border);flex-shrink:0}
+.tb-btn{padding:4px 11px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text);cursor:pointer;font-family:inherit;font-size:11px;transition:all .12s;white-space:nowrap}
+.tb-btn:hover{border-color:var(--blue);color:var(--blue)}
+.tb-btn:disabled{opacity:.4;cursor:not-allowed}
+.tb-btn.remove-active{border-color:#f85149;color:#f85149;background:#2d1a1a}
+.tb-btn.remove-active:hover{border-color:#ff7b72;color:#ff7b72}
+#destPath{flex:1;min-width:80px;padding:4px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg0);color:var(--text);font-family:inherit;font-size:11px}
+#destPath:focus{outline:none;border-color:var(--blue)}
+.dest-label{font-size:10px;color:var(--muted);white-space:nowrap}
+
+/* ─── Main layout ─── */
+#main{display:flex;flex:1;overflow:hidden}
+
+/* ─── Sidebar ─── */
+#sidebar{width:230px;flex-shrink:0;background:var(--bg1);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#sidebar-hdr{padding:9px 12px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+#sidebar-hdr span{font-size:9px;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
+#worlds-list{flex:1;overflow-y:auto;padding:6px}
+.world-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;padding:9px 10px;transition:border-color .12s}
+.world-card-top{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.world-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+.world-name{font-size:12px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.world-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0}
+.world-del:hover{color:var(--red)}
+.world-meta{font-size:10px;color:var(--muted);line-height:1.9}
+.world-meta span{color:var(--text)}
+.world-offset{display:flex;align-items:center;gap:5px;margin-top:6px}
+.offset-input{width:55px;padding:3px 5px;border-radius:4px;border:1px solid var(--border);background:var(--bg0);color:var(--text);font-family:inherit;font-size:10px;text-align:center}
+.offset-input:focus{outline:none;border-color:var(--blue)}
+.offset-label{font-size:9px;color:var(--dim)}
+#add-world-btn{margin:7px;padding:8px;border-radius:6px;border:1px dashed var(--border);background:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:11px;transition:all .12s}
+#add-world-btn:hover{border-color:var(--blue);color:var(--blue)}
+
+/* ─── Grid area ─── */
+#grid-area{flex:1;overflow:hidden;display:flex;flex-direction:column}
+#grid-toolbar{padding:6px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-size:10px;color:var(--muted);flex-shrink:0}
+#grid-info{flex:1}
+.zoom-btn{padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);color:var(--text);cursor:pointer;font-family:inherit;font-size:12px}
+.zoom-btn:hover{border-color:var(--blue)}
+#grid-canvas-wrap{flex:1;overflow:auto;position:relative;background:var(--bg0);cursor:default}
+#grid-canvas{display:block}
+#coord-tooltip{position:fixed;display:none;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;padding:3px 8px;font-size:10px;color:var(--muted);pointer-events:none;z-index:10}
+#overlap-warn{margin:5px 12px;padding:6px 12px;border-radius:6px;font-size:11px;display:block;transition:background .2s,border-color .2s,color .2s}
+#statusbar{background:var(--bg1);border-top:1px solid var(--border);padding:4px 14px;display:flex;align-items:center;gap:14px;font-size:10px;color:var(--muted);flex-shrink:0}
+
+/* ─── Output panel ─── */
+#output-panel{width:330px;flex-shrink:0;background:var(--bg1);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#output-header{padding:9px 12px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+#output-header span{font-size:9px;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
+.fmt-tabs{display:flex;gap:3px}
+.fmt-tab{padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:10px}
+.fmt-tab.active{background:#1f3152;border-color:var(--blue);color:var(--blue)}
+#cmd-list{flex:1;overflow-y:auto;padding:10px;font-size:10px;line-height:2}
+.cmd-comment{color:var(--dim)}
+.cmd-line{color:var(--green);word-break:break-all}
+#output-footer{padding:8px 10px;border-top:1px solid var(--border);display:flex;gap:7px}
+#copy-btn,#exec-btn{flex:1;padding:7px;border-radius:6px;font-family:inherit;font-size:11px;cursor:pointer;border:1px solid var(--border);font-weight:700;transition:all .15s}
+#copy-btn{background:var(--bg2);color:var(--text)}
+#copy-btn:hover{border-color:var(--blue);color:var(--blue)}
+#copy-btn.ok{background:#0d2818;border-color:#238636;color:var(--green)}
+#exec-btn{background:#1a3a1a;border-color:#2ea043;color:var(--green)}
+#exec-btn:hover{background:#1f4a1f}
+#exec-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ─── Add World Modal ─── */
+#modal-overlay{display:none;position:fixed;inset:0;background:#00000099;z-index:200;align-items:center;justify-content:center}
+#modal-overlay.show{display:flex}
+#modal{background:var(--bg1);border:1px solid var(--border2);border-radius:10px;padding:20px;width:480px;max-width:95vw}
+#modal h2{font-size:14px;color:var(--blue);margin-bottom:14px}
+.modal-field{margin-bottom:12px}
+.modal-field label{display:block;font-size:10px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px}
+.modal-field input{width:100%;padding:7px 9px;border-radius:5px;border:1px solid var(--border);background:var(--bg0);color:var(--text);font-family:inherit;font-size:11px}
+.modal-field input:focus{outline:none;border-color:var(--blue)}
+.modal-path-row{display:flex;gap:7px}
+.modal-path-row input{flex:1}
+#modal-detected{font-size:10px;color:var(--muted);margin-top:4px;height:14px}
+.modal-btns{display:flex;gap:8px;margin-top:16px}
+.modal-btns button{flex:1;padding:8px;border-radius:6px;font-family:inherit;font-size:12px;cursor:pointer;border:1px solid var(--border);font-weight:700}
+#modal-ok{background:#1a3a1a;border-color:#2ea043;color:var(--green)}
+#modal-ok:hover{background:#1f4a1f}
+#modal-cancel{background:var(--bg2);color:var(--muted)}
+#modal-cancel:hover{color:var(--text)}
+
+/* ─── CONFLICT RESOLUTION MODAL ─── */
+#conflict-overlay{display:none;position:fixed;inset:0;background:#000000bb;z-index:300;overflow-y:auto;padding:20px 10px}
+#conflict-overlay.show{display:block}
+#conflict-box{background:var(--bg1);border:1px solid var(--border2);border-radius:12px;max-width:820px;margin:0 auto;overflow:hidden}
+
+/* Header */
+#conflict-hdr{padding:18px 20px 14px;border-bottom:1px solid var(--border)}
+#conflict-hdr h2{font-size:14px;color:var(--blue);margin-bottom:12px}
+.cf-summary{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.cf-stat{font-size:11px;display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:5px;background:var(--bg2)}
+.cf-stat-ok{color:var(--green)}
+.cf-stat-warn{color:var(--warn)}
+.cf-stat-dest{color:var(--blue)}
+.cf-stat-skip{color:var(--muted)}
+#cf-progress-wrap{background:var(--bg2);border-radius:3px;height:3px}
+#cf-progress-bar{background:var(--green);height:3px;border-radius:3px;transition:width .3s;width:0%}
+
+/* Bulk actions bar */
+#bulk-bar{padding:10px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bulk-label{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin-right:2px;flex-shrink:0}
+.bulk-btn{padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:inherit;font-size:10px;transition:all .12s}
+.bulk-btn:hover{border-color:var(--blue);color:var(--blue)}
+
+/* Conflict list */
+#cf-list{padding:14px 16px;display:flex;flex-direction:column;gap:12px;max-height:60vh;overflow-y:auto}
+.cf-card{background:var(--bg0);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .2s}
+.cf-card.resolved{border-color:#238636}
+.cf-card.skipped{border-color:var(--border2)}
+
+/* Card header */
+.cf-card-hdr{background:var(--bg1);padding:9px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.cf-dest-file{font-size:12px;font-weight:700;color:var(--text);flex:1;font-family:monospace}
+.cf-type-pill{font-size:8px;padding:2px 7px;border-radius:10px;font-weight:700;letter-spacing:.5px}
+.type-world{background:#2d1f00;color:var(--warn)}
+.type-dest{background:#0d1f3a;color:var(--blue)}
+.cf-res-badge{font-size:8px;padding:2px 7px;border-radius:10px;font-weight:700;letter-spacing:.5px;transition:all .2s}
+.res-unresolved{background:var(--border);color:var(--muted)}
+.res-resolved{background:#0d2818;color:var(--green)}
+.res-skipped{background:var(--bg2);color:var(--border2)}
+
+/* Options grid */
+.cf-options{display:grid;padding:12px;gap:10px}
+.cf-options.n2{grid-template-columns:1fr 1fr}
+.cf-options.n3{grid-template-columns:1fr 1fr 1fr}
+.cf-options.n4{grid-template-columns:1fr 1fr 1fr 1fr}
+
+/* Option card */
+.opt-card{border:1px solid var(--border);border-radius:7px;padding:11px;cursor:pointer;transition:all .15s;background:var(--bg1)}
+.opt-card:hover{border-color:var(--border2)}
+.opt-card.selected{border-color:var(--green) !important;background:#0a2010}
+.opt-card.rejected{opacity:.3;pointer-events:none}
+.opt-card.existing-card{border-style:dashed}
+
+.opt-hdr{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+.opt-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.opt-world{font-size:11px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opt-exist-tag{font-size:8px;padding:1px 5px;background:var(--bg2);color:var(--muted);border-radius:3px;flex-shrink:0}
+
+.opt-srcfile{font-size:10px;color:var(--muted);margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opt-size{font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px}
+.opt-date{font-size:10px;color:var(--muted);margin-bottom:8px}
+
+.opt-badges{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:9px;min-height:18px}
+.opt-badge{font-size:8px;padding:2px 6px;border-radius:8px;font-weight:700;letter-spacing:.3px}
+.badge-newest{background:#0d1f3a;color:var(--blue)}
+.badge-oldest{background:var(--bg2);color:var(--dim)}
+.badge-largest{background:#0d2010;color:var(--green)}
+.badge-smallest{background:#2d0f0f;color:var(--red)}
+.badge-same{background:var(--bg2);color:var(--dim)}
+
+.keep-btn{width:100%;padding:6px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text);cursor:pointer;font-family:inherit;font-size:10px;font-weight:700;transition:all .12s}
+.keep-btn:hover{border-color:var(--green);color:var(--green);background:#0a2010}
+.opt-card.selected .keep-btn{background:#0a2010;border-color:var(--green);color:var(--green)}
+.opt-card.existing-card .keep-btn:hover{border-color:var(--blue);color:var(--blue);background:#0a1a2a}
+.opt-card.existing-card.selected .keep-btn{background:#0a1a2a;border-color:var(--blue);color:var(--blue)}
+
+/* Skip row */
+.cf-skip-row{padding:0 12px 12px;display:flex;justify-content:center}
+.skip-btn{padding:5px 18px;border-radius:5px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:10px;transition:all .12s}
+.skip-btn:hover{border-color:var(--warn);color:var(--warn)}
+.skip-btn.active{border-color:var(--border2);color:var(--text);background:var(--bg2)}
+
+/* Footer */
+#cf-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+#cf-status{font-size:11px;color:var(--muted)}
+#cf-foot-btns{display:flex;gap:8px;flex-shrink:0}
+#cf-cancel-btn{padding:7px 16px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:inherit;font-size:11px}
+#cf-cancel-btn:hover{color:var(--text)}
+#cf-exec-btn{padding:7px 18px;border-radius:6px;border:1px solid #2ea043;background:#1a3a1a;color:var(--green);cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;transition:all .15s;white-space:nowrap}
+#cf-exec-btn:hover{background:#1f4a1f}
+#cf-exec-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ─── Result modal ─── */
+#result-overlay{display:none;position:fixed;inset:0;background:#00000099;z-index:400;align-items:center;justify-content:center}
+#result-overlay.show{display:flex}
+#result-box{background:var(--bg1);border:1px solid var(--border2);border-radius:10px;padding:20px;width:440px;max-width:95vw}
+#result-box h2{font-size:14px;margin-bottom:12px}
+#result-list{max-height:300px;overflow-y:auto;font-size:11px;line-height:2;margin-bottom:12px}
+.res-ok{color:var(--green)}
+.res-kept{color:var(--blue)}
+.res-err{color:var(--red)}
+#result-summary{font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.8}
+#result-close{width:100%;padding:8px;border-radius:6px;font-family:inherit;font-size:12px;cursor:pointer;border:1px solid var(--border2);background:var(--bg2);color:var(--text);font-weight:700}
+#result-close:hover{border-color:var(--blue);color:var(--blue)}
+
+/* ─── IMPORT FROM SAVES MODAL ─── */
+#import-overlay{display:none;position:fixed;inset:0;background:#000000bb;z-index:300;overflow-y:auto;padding:20px 10px}
+#import-overlay.show{display:block}
+#import-box{background:var(--bg1);border:1px solid var(--border2);border-radius:12px;max-width:860px;margin:0 auto;overflow:hidden}
+#import-hdr{padding:16px 20px 12px;border-bottom:1px solid var(--border)}
+#import-hdr h2{font-size:14px;color:var(--blue);margin-bottom:4px}
+#import-hdr-sub{font-size:10px;color:var(--muted)}
+#import-root-bar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg0)}
+#import-root-lbl{font-size:10px;color:var(--dim);white-space:nowrap}
+#import-root-path{flex:1;font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#import-root-change{padding:3px 9px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:inherit;font-size:10px}
+#import-root-change:hover{color:var(--blue);border-color:var(--blue)}
+#import-controls{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border)}
+.import-ctrl-btn{padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:inherit;font-size:10px}
+.import-ctrl-btn:hover{color:var(--text)}
+#import-filter{padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg0);color:var(--text);font-family:inherit;font-size:10px;width:160px}
+#import-filter:focus{outline:none;border-color:var(--blue)}
+/* size filter toggle + input */
+#size-filter-wrap{display:flex;align-items:center;gap:6px;padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);transition:border-color .12s}
+#size-filter-wrap.active{border-color:var(--blue)}
+#size-filter-toggle{width:28px;height:14px;border-radius:7px;background:var(--border2);border:none;cursor:pointer;position:relative;flex-shrink:0;transition:background .15s;padding:0}
+#size-filter-toggle::after{content:'';position:absolute;left:2px;top:2px;width:10px;height:10px;border-radius:50%;background:#fff;transition:left .15s}
+#size-filter-toggle.on{background:var(--blue)}
+#size-filter-toggle.on::after{left:16px}
+#size-filter-lbl{font-size:10px;color:var(--muted);white-space:nowrap;transition:color .12s}
+#size-filter-wrap.active #size-filter-lbl{color:var(--text)}
+#size-filter-kb{width:58px;padding:2px 5px;border-radius:3px;border:1px solid var(--border);background:var(--bg0);color:var(--text);font-family:inherit;font-size:10px;text-align:right;transition:opacity .15s}
+#size-filter-kb:focus{outline:none;border-color:var(--blue)}
+#size-filter-kb:disabled{opacity:.3;pointer-events:none}
+#size-filter-unit{font-size:10px;color:var(--muted)}
+#import-sel-count{font-size:10px;color:var(--muted);margin-left:auto}
+#import-world-list{max-height:52vh;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.iw-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;border:1px solid var(--border);background:var(--bg0);cursor:pointer;transition:border-color .12s;user-select:none}
+.iw-row:hover{border-color:var(--border2)}
+.iw-row.selected{border-color:var(--blue);background:#0d1f38}
+.iw-row.no-region{opacity:.45;cursor:default}
+.iw-cb{width:14px;height:14px;border-radius:3px;border:1px solid var(--border2);background:var(--bg2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;transition:all .12s}
+.iw-row.selected .iw-cb{background:var(--blue);border-color:var(--blue);color:#fff}
+.iw-name{font-size:12px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.iw-tag{font-size:8px;padding:2px 6px;border-radius:8px;font-weight:700;flex-shrink:0}
+.tag-ok{background:#0d2010;color:var(--green)}
+.tag-none{background:var(--bg2);color:var(--dim)}
+.iw-meta{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap;flex-shrink:0}
+.iw-meta strong{color:var(--text)}
+.iw-skip-note{font-size:9px;color:var(--warn)}
+#import-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+#import-footer-info{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+#import-footer-btns{display:flex;gap:8px;flex-shrink:0}
+#import-cancel-btn{padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:inherit;font-size:11px}
+#import-cancel-btn:hover{color:var(--text)}
+#import-do-btn{padding:6px 16px;border-radius:6px;border:1px solid #2ea043;background:#1a3a1a;color:var(--green);cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;transition:all .15s}
+#import-do-btn:hover{background:#1f4a1f}
+#import-do-btn:disabled{opacity:.4;cursor:not-allowed}
+#import-loading{padding:40px;text-align:center;color:var(--muted);font-size:12px}
+
+/* ─── DESTINATION PICKER MODAL ─── */
+#dest-overlay{display:none;position:fixed;inset:0;background:#000000bb;z-index:300;overflow-y:auto;padding:20px 10px}
+#dest-overlay.show{display:block}
+#dest-box{background:var(--bg1);border:1px solid var(--border2);border-radius:12px;max-width:700px;margin:0 auto;overflow:hidden}
+#dest-hdr{padding:16px 20px 12px;border-bottom:1px solid var(--border)}
+#dest-hdr h2{font-size:14px;color:var(--blue);margin-bottom:3px}
+#dest-hdr-sub{font-size:10px;color:var(--muted)}
+#dest-root-bar{display:flex;align-items:center;gap:8px;padding:9px 16px;border-bottom:1px solid var(--border);background:var(--bg0)}
+#dest-root-path{flex:1;font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.dest-root-btn{padding:3px 9px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:inherit;font-size:10px}
+.dest-root-btn:hover{color:var(--blue);border-color:var(--blue)}
+#dest-filter-bar{padding:8px 16px;border-bottom:1px solid var(--border)}
+#dest-filter{width:100%;padding:5px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg0);color:var(--text);font-family:inherit;font-size:11px}
+#dest-filter:focus{outline:none;border-color:var(--blue)}
+#dest-world-list{max-height:44vh;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:5px}
+/* radio-style world rows */
+.dw-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;border:1px solid var(--border);background:var(--bg0);cursor:pointer;transition:border-color .12s;user-select:none}
+.dw-row:hover{border-color:var(--border2)}
+.dw-row.selected{border-color:var(--blue);background:#0d1f38}
+.dw-row.empty-world{opacity:.55}
+.dw-radio{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border2);background:var(--bg2);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .12s}
+.dw-row.selected .dw-radio{border-color:var(--blue);background:var(--blue)}
+.dw-radio-dot{width:5px;height:5px;border-radius:50%;background:#fff;display:none}
+.dw-row.selected .dw-radio-dot{display:block}
+.dw-name{font-size:12px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dw-tag{font-size:8px;padding:2px 6px;border-radius:8px;font-weight:700;flex-shrink:0}
+.dw-meta{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap;flex-shrink:0}
+/* conflict / add-to-grid panel */
+#dest-analysis{margin:0 12px 12px;border-radius:8px;overflow:hidden;display:none}
+#dest-warn-box{background:#2d1a00;border:1px solid var(--warn);border-radius:8px;padding:11px 14px;margin:0 12px 8px;display:none}
+#dest-warn-title{font-size:11px;color:#fcd34d;font-weight:700;margin-bottom:4px}
+#dest-warn-detail{font-size:10px;color:#fcd34d;opacity:.85;line-height:1.6}
+#dest-ok-box{background:#0a2010;border:1px solid #238636;border-radius:8px;padding:11px 14px;margin:0 12px 8px;display:none}
+#dest-ok-box p{font-size:11px;color:var(--green);line-height:1.6}
+#dest-add-row{display:none;margin:0 12px 8px;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .12s}
+#dest-add-row:hover{border-color:var(--blue)}
+#dest-add-row.checked{border-color:var(--blue);background:#0d1f38}
+.add-row-inner{display:flex;align-items:flex-start;gap:10px}
+#dest-add-cb{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);background:var(--bg1);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:9px;transition:all .12s}
+#dest-add-row.checked #dest-add-cb{background:var(--blue);border-color:var(--blue);color:#fff}
+.add-row-text{}
+.add-row-title{font-size:11px;font-weight:700;color:var(--text)}
+.add-row-sub{font-size:10px;color:var(--muted);margin-top:2px;line-height:1.5}
+#dest-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+#dest-footer-info{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+#dest-footer-btns{display:flex;gap:8px;flex-shrink:0}
+#dest-cancel-btn{padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:inherit;font-size:11px}
+#dest-cancel-btn:hover{color:var(--text)}
+#dest-confirm-btn{padding:6px 16px;border-radius:6px;border:1px solid #2ea043;background:#1a3a1a;color:var(--green);cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;transition:all .15s}
+#dest-confirm-btn:hover{background:#1f4a1f}
+#dest-confirm-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* dimension chips in import modal */
+.dim-chips{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap}
+.dim-chip{padding:2px 8px;border-radius:10px;border:1px solid var(--border);font-size:9px;font-weight:700;cursor:pointer;transition:all .12s;background:var(--bg2);color:var(--muted);user-select:none}
+.dim-chip:hover{border-color:var(--blue);color:var(--blue)}
+.dim-chip.active{background:#1f3152;border-color:var(--blue);color:var(--blue)}
+.dim-chip.disabled{opacity:.3;pointer-events:none}
+/* origin coords display in grid toolbar */
+#origin-coords{font-size:10px;color:var(--warn);padding:1px 7px;border-radius:4px;border:1px solid var(--warn)44;background:var(--warn)11;white-space:nowrap}
+.origin-reset-btn{padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;font-family:inherit;font-size:10px}
+.origin-reset-btn:hover{border-color:var(--warn);color:var(--warn)}
+
+/* version badges in import modal */
+.ver-badge{font-size:8px;padding:2px 6px;border-radius:8px;font-weight:700;white-space:nowrap;flex-shrink:0;background:#1a1a2e;color:#8b8b9e;border:1px solid #333}
+.ver-unknown{background:var(--bg2);color:var(--dim);border:1px solid var(--border)} /* no level.dat */
+</style>
+</head>
+<body>
+
+<!-- ── TOOLBAR ── -->
+<div id="toolbar">
+  <h1>🗺 MC Region Tool</h1>
+  <div class="sep"></div>
+  <span class="dest-label">Destination:</span>
+  <input id="destPath" placeholder="new_world/region — paste path or Browse…"/>
+  <button class="tb-btn" onclick="browseDest()">Browse…</button>
+  <button class="tb-btn" onclick="openDestPicker()" style="border-color:#388bfd55;color:var(--blue)" title="Pick a world from your local Minecraft installation">🎯 Pick World…</button>
+  <div class="sep"></div>
+  <button class="tb-btn" id="import-saves-btn" onclick="openImportSaves()" style="border-color:#388bfd;color:var(--blue)">⬆ Import from Saves</button>
+  <div class="sep"></div>
+  <button class="tb-btn" onclick="snapAll()">Auto-arrange</button>
+  <button class="tb-btn" id="remove-tool-btn" onclick="toggleRemoveMode()" title="Click cells to remove them from the import. Hold and drag to erase multiple.">✕ Remove</button>
+  <button class="tb-btn" onclick="resetView()">Reset view</button>
+</div>
+
+<!-- ── MAIN ── -->
+<div id="main">
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-hdr"><span>Source Worlds</span></div>
+    <div id="worlds-list"></div>
+    <button id="add-world-btn" onclick="openModal()">+ Add World</button>
+  </div>
+
+  <!-- Grid -->
+  <div id="grid-area">
+    <div id="grid-toolbar">
+      <span id="entity-legend" style="display:none;align-items:center;gap:6px;font-size:9px;color:var(--muted)">
+        <span style="display:inline-flex;flex-direction:column;gap:1px;height:12px;justify-content:flex-end">
+          <span style="width:12px;height:2px;background:#f59e0b55;display:block"></span>
+        </span>&lt;200KB
+        <span style="display:inline-flex;flex-direction:column;gap:1px;height:12px;justify-content:flex-end">
+          <span style="width:12px;height:5px;background:#f59e0b77;display:block"></span>
+        </span>200–500KB
+        <span style="display:inline-flex;flex-direction:column;gap:1px;height:12px;justify-content:flex-end">
+          <span style="width:12px;height:7px;background:#f59e0b99;display:block"></span>
+        </span>&gt;500KB
+      </span>
+      <span id="grid-info">Add a world to see the grid</span>
+      <span id="origin-coords" title="Drag the ✛ crosshair on the grid to reposition the Minecraft 0,0 origin">✛ 0, 0</span>
+      <button class="origin-reset-btn" onclick="resetOrigin()">Reset origin</button>
+      <button class="zoom-btn" onclick="zoom(-1)">−</button>
+      <button class="zoom-btn" onclick="zoom(1)">+</button>
+      <span id="zoom-label">100%</span>
+    </div>
+    <div id="overlap-warn"></div>
+    <div id="grid-canvas-wrap">
+      <canvas id="grid-canvas"></canvas>
+    </div>
+    <div id="statusbar"><span id="status-msg">Add a world to begin</span></div>
+  </div>
+
+  <!-- Output panel -->
+  <div id="output-panel">
+    <div id="output-header">
+      <span>Commands</span>
+      <div class="fmt-tabs">
+        <button class="fmt-tab active" id="fmt-powershell" onclick="setFmt('powershell')">PS</button>
+        <button class="fmt-tab" id="fmt-bash" onclick="setFmt('bash')">bash</button>
+        <button class="fmt-tab" id="fmt-cmd" onclick="setFmt('cmd')">cmd</button>
+      </div>
+    </div>
+    <div id="cmd-list"><span style="color:var(--dim)">Commands will appear here…</span></div>
+    <div id="output-footer">
+      <button id="copy-btn" onclick="copyAll()">Copy All</button>
+      <button id="exec-btn" onclick="execAll()">⚡ Execute</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD WORLD MODAL ── -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h2>Add Source World</h2>
+    <div class="modal-field">
+      <label>World name</label>
+      <input id="modal-name" placeholder="e.g. Survival 2020"/>
+    </div>
+    <div class="modal-field">
+      <label>Region folder path</label>
+      <div class="modal-path-row">
+        <input id="modal-path" placeholder="Paste path or Browse…" oninput="scanPath()"/>
+        <button class="tb-btn" onclick="browseSource()">Browse…</button>
+      </div>
+      <div id="modal-detected">—</div>
+    </div>
+    <div class="modal-btns">
+      <button id="modal-ok" onclick="confirmAdd()">Add World</button>
+      <button id="modal-cancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONFLICT RESOLUTION MODAL ── -->
+<div id="conflict-overlay">
+  <div id="conflict-box">
+
+    <div id="conflict-hdr">
+      <h2>⚡ Pre-flight Check</h2>
+      <div class="cf-summary" id="cf-summary"></div>
+      <div id="cf-progress-wrap"><div id="cf-progress-bar"></div></div>
+    </div>
+
+    <div id="bulk-bar">
+      <span class="bulk-label">Bulk resolve:</span>
+      <button class="bulk-btn" onclick="bulkResolve('newer')" title="Pick the most recently modified file for each conflict">Keep newer</button>
+      <button class="bulk-btn" onclick="bulkResolve('larger')" title="Pick the largest file for each conflict">Keep larger</button>
+      <button class="bulk-btn" onclick="bulkResolve('smaller')" title="Pick the smallest file for each conflict">Keep smaller</button>
+      <button class="bulk-btn" onclick="bulkResolve('first')" title="Always prefer the first source world added">Prefer first world</button>
+      <button class="bulk-btn" onclick="bulkResolve('last')" title="Always prefer the last source world added">Prefer last world</button>
+      <button class="bulk-btn" onclick="bulkResolve('existing')" title="Keep all files already in the destination — skip incoming">Keep all existing</button>
+      <button class="bulk-btn" onclick="bulkResolve('skip')" title="Skip all conflicting files — only copy clean ones">Skip all conflicts</button>
+    </div>
+
+    <div id="cf-list"></div>
+
+    <div id="cf-footer">
+      <div id="cf-status">Resolve all conflicts to continue</div>
+      <div id="cf-foot-btns">
+        <button id="cf-cancel-btn" onclick="closeConflict()">Cancel</button>
+        <button id="cf-exec-btn" onclick="doExecute()" disabled>⚡ Execute</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── RESULT MODAL ── -->
+<div id="result-overlay">
+  <div id="result-box">
+    <h2 id="result-title">Results</h2>
+    <div id="result-summary"></div>
+    <div id="result-list"></div>
+    <button id="result-close" onclick="closeResult()">Close</button>
+  </div>
+</div>
+
+<div id="coord-tooltip"></div>
+
+
+<!-- ── DESTINATION PICKER MODAL ── -->
+<div id="dest-overlay">
+  <div id="dest-box">
+    <div id="dest-hdr">
+      <h2>🎯 Set Destination World</h2>
+      <div id="dest-hdr-sub">Pick a world from your local Minecraft installation to copy into</div>
+    </div>
+    <div id="dest-root-bar">
+      <span style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:2px;white-space:nowrap">SAVES</span>
+      <span id="dest-root-path">Loading…</span>
+      <button class="dest-root-btn" onclick="changeDestRoot()">Change…</button>
+      <button class="dest-root-btn" onclick="openDestFolderInExplorer()">Open folder</button>
+    </div>
+    <div id="dest-filter-bar">
+      <input id="dest-filter" placeholder="Filter worlds by name…" oninput="renderDestList()"/>
+    </div>
+    <div id="dest-world-list"><div style="padding:30px;text-align:center;color:var(--dim);font-size:11px">Loading worlds…</div></div>
+    <div id="dest-warn-box">
+      <div id="dest-warn-title"></div>
+      <div id="dest-warn-detail"></div>
+    </div>
+    <div id="dest-ok-box"><p id="dest-ok-text"></p></div>
+    <div id="dest-add-row" onclick="toggleDestAdd()">
+      <div class="add-row-inner">
+        <div id="dest-add-cb"></div>
+        <div class="add-row-text">
+          <div class="add-row-title" id="dest-add-title">Also add this world to the placement grid</div>
+          <div class="add-row-sub">Imports the existing region files so you can see where chunks already are and position your imports to avoid or intentionally overlap them. Conflicts will still go through the resolution step.</div>
+        </div>
+      </div>
+    </div>
+    <div id="dest-footer">
+      <div id="dest-footer-info">Select a world above</div>
+      <div id="dest-footer-btns">
+        <button id="dest-cancel-btn" onclick="closeDestPicker()">Cancel</button>
+        <button id="dest-confirm-btn" onclick="confirmDestPicker()" disabled>Set as Destination</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── IMPORT FROM SAVES MODAL ── -->
+<div id="import-overlay">
+  <div id="import-box">
+    <div id="import-hdr">
+      <h2>⬆ Import from Saves</h2>
+      <div id="import-hdr-sub">Select worlds to import · use the size filter to skip near-empty region files</div>
+    </div>
+    <div id="import-root-bar">
+      <span class="import-root-lbl">SAVES ROOT</span>
+      <span id="import-root-path">Loading…</span>
+      <button id="import-root-change" onclick="changeSavesRoot()">Change…</button>
+    </div>
+    <div id="import-controls">
+      <button class="import-ctrl-btn" onclick="importSelectAll()">Select all</button>
+      <button class="import-ctrl-btn" onclick="importSelectNone()">Deselect all</button>
+      <button class="import-ctrl-btn" onclick="importSelectWithRegion()">Only with regions</button>
+      <input id="import-filter" placeholder="Filter by name…" oninput="renderImportList()"/>
+      <div id="size-filter-wrap" class="active">
+        <button id="size-filter-toggle" class="on" onclick="toggleSizeFilter()" title="Toggle minimum file size filter"></button>
+        <span id="size-filter-lbl">Min size</span>
+        <input id="size-filter-kb" type="number" min="0" max="99999" value="100" oninput="onSizeFilterChange()"/>
+        <span id="size-filter-unit">KB</span>
+      </div>
+      <span id="import-sel-count">0 selected</span>
+    </div>
+    <div id="import-world-list"><div id="import-loading">Loading worlds…</div></div>
+    <div id="import-footer">
+      <div id="import-footer-info">Select worlds above then click Import</div>
+      <div id="import-footer-btns">
+        <button id="import-cancel-btn" onclick="closeImportSaves()">Cancel</button>
+        <button id="import-do-btn" onclick="doImportSaves()" disabled>⬆ Import selected</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Constants & palette ──────────────────────────────────────────────────────
+// Tracks last browsed dir client-side as a hint to pass to the server dialog.
+// The server also tracks it independently, but sending it as a query param
+// means even a fresh dialog call after a page reload will land in the right spot.
+let lastBrowsedDir = null;
+function browseUrl(hint) {
+  const dir = hint || lastBrowsedDir;
+  return "/api/browse" + (dir ? "?startPath=" + encodeURIComponent(dir) : "");
+}
+function recordBrowse(path) {
+  if (path) lastBrowsedDir = path;
+  return path;
+}
+const PALETTE = [
+  {bg:"#3b82f6",dim:"#1e3a5f"},{bg:"#f59e0b",dim:"#4d3010"},
+  {bg:"#10b981",dim:"#0a3a27"},{bg:"#ef4444",dim:"#3d1010"},
+  {bg:"#8b5cf6",dim:"#2e1a5f"},{bg:"#ec4899",dim:"#4d1035"},
+  {bg:"#14b8a6",dim:"#0a3530"},{bg:"#f97316",dim:"#4a2008"},
+];
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let worlds = [];
+let fmt = "powershell";
+let cellSize = 32;
+let idCounter = 0;
+let pendingRegions = null;
+let panX = 0, panY = 0;
+let isPanning = false, panStart = null;
+let dragState = null;
+let removeMode = false;   // eraser tool active
+let hoverCell  = null;    // {gx,gz} — cell under cursor in remove mode
+let isErasing  = false;   // mouse held during remove mode
+let originX = 0, originZ = 0;  // Minecraft 0,0 in region-grid coords
+let isDraggingOrigin = false;
+// Conflict state
+let preflightData = null;   // {conflicts, clean, totalFiles, ...}
+let resolutions = [];       // index matches preflightData.conflicts; value = optionIndex | 'skip' | null
+
+const canvas = document.getElementById("grid-canvas");
+const ctx = canvas.getContext("2d");
+const wrap = document.getElementById("grid-canvas-wrap");
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function setStatus(msg){document.getElementById("status-msg").textContent=msg}
+
+function formatSize(bytes){
+  if(!bytes) return "0 KB";
+  if(bytes>=1024*1024) return (bytes/(1024*1024)).toFixed(1)+" MB";
+  return Math.round(bytes/1024).toLocaleString()+" KB";
+}
+function formatDate(ms){
+  if(!ms) return "Unknown";
+  const d=new Date(ms);
+  return d.toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})
+    +" · "+d.toTimeString().slice(0,5);
+}
+function getWorldColor(worldId){
+  const w=worlds.find(w=>w.id===worldId);
+  return w ? w.color : {bg:"#8b949e",dim:"#30363d"};
+}
+
+// ─── World management ─────────────────────────────────────────────────────────
+function getBounds(cells){
+  if(!cells.length) return{minX:0,maxX:0,minZ:0,maxZ:0};
+  return{minX:Math.min(...cells.map(c=>c.x)),maxX:Math.max(...cells.map(c=>c.x)),
+         minZ:Math.min(...cells.map(c=>c.z)),maxZ:Math.max(...cells.map(c=>c.z))};
+}
+function getAllPlaced(){
+  return worlds.flatMap(w=>{
+    const previewOx = (dragState && dragState.worldId===w.id) ? dragState.ox+dragState.previewDx : w.ox;
+    const previewOz = (dragState && dragState.worldId===w.id) ? dragState.oz+dragState.previewDz : w.oz;
+    return w.regions.map(r=>({x:r.x+previewOx, z:r.z+previewOz, wid:w.id}));
+  });
+}
+function getOverlaps(){
+  const map={},ov=new Set();
+  getAllPlaced().forEach(c=>{
+    const k=`${c.x},${c.z}`;
+    if(map[k]!==undefined && map[k]!==c.wid) ov.add(k);
+    else if(map[k]===undefined) map[k]=c.wid;
+  });
+  return ov;
+}
+function addWorld(name,dir,regions,opts={}){
+  const pal=PALETTE[worlds.length%PALETTE.length];
+  const bounds=getBounds(regions);
+  // Center this world's bounding box over 0,0 so imports land near the origin
+  const ox=Math.round(-((bounds.minX+bounds.maxX)/2));
+  const oz=Math.round(-((bounds.minZ+bounds.maxZ)/2));
+  worlds.push({id:++idCounter,name,dir,color:pal,regions,ox,oz,bounds,
+    needsNbtPatch: true,
+    versionLabel: opts.versionLabel||null,
+    subfolders: opts.subfolders||{},
+    entities:   opts.entities||[],
+    poi:        opts.poi||[],
+  });
+  renderSidebar(); renderGrid(); renderCmds();
+  setStatus(`Added "${name}" — ${regions.length} regions`);
+}
+function removeWorld(id){
+  worlds=worlds.filter(w=>w.id!==id);
+  renderSidebar(); renderGrid(); renderCmds();
+}
+function snapAll(){
+  if(!worlds.length) return;
+  // Step 1: pack worlds side-by-side starting from x=0
+  worlds[0].ox=-worlds[0].bounds.minX;
+  worlds[0].oz=-worlds[0].bounds.minZ;
+  for(let i=1;i<worlds.length;i++){
+    const prev=worlds[i-1];
+    const prevRight=prev.bounds.maxX+prev.ox+1;
+    worlds[i].ox=prevRight-worlds[i].bounds.minX;
+    worlds[i].oz=-worlds[i].bounds.minZ;
+  }
+  // Step 2: find the collective bounding box of all placed regions
+  const allX=worlds.flatMap(w=>[w.bounds.minX+w.ox, w.bounds.maxX+w.ox]);
+  const allZ=worlds.flatMap(w=>[w.bounds.minZ+w.oz, w.bounds.maxZ+w.oz]);
+  const colMinX=Math.min(...allX), colMaxX=Math.max(...allX);
+  const colMinZ=Math.min(...allZ), colMaxZ=Math.max(...allZ);
+  // Step 3: shift every world so the collective centre lands on 0,0
+  const shiftX=Math.round(-((colMinX+colMaxX)/2));
+  const shiftZ=Math.round(-((colMinZ+colMaxZ)/2));
+  worlds.forEach(w=>{ w.ox+=shiftX; w.oz+=shiftZ; });
+  renderSidebar(); renderGrid(); renderCmds();
+  setStatus("Auto-arranged and centred around 0,0");
+}
+
+// ─── Grid rendering ───────────────────────────────────────────────────────────
+function renderGrid(){
+  const placed=getAllPlaced(), overlaps=getOverlaps();
+  const W=wrap.clientWidth, H=wrap.clientHeight;
+  canvas.width=W; canvas.height=H;
+  ctx.clearRect(0,0,W,H);
+  if(!placed.length){
+    ctx.fillStyle="#30363d88"; ctx.font="12px monospace";
+    ctx.fillText("Add a world to see the grid",W/2-100,H/2); return;
+  }
+  const cellMap={};
+  placed.forEach(c=>{const k=`${c.x},${c.z}`;if(!cellMap[k])cellMap[k]=[];cellMap[k].push(c.wid);});
+  // Use frozen bounds during drag so the grid frame stays stable
+  const _xs=placed.map(c=>c.x), _zs=placed.map(c=>c.z);
+  const minX = dragState&&dragState.frozenBounds ? dragState.frozenBounds.minX : Math.min(..._xs)-2;
+  const maxX = dragState&&dragState.frozenBounds ? dragState.frozenBounds.maxX : Math.max(..._xs)+2;
+  const minZ = dragState&&dragState.frozenBounds ? dragState.frozenBounds.minZ : Math.min(..._zs)-2;
+  const maxZ = dragState&&dragState.frozenBounds ? dragState.frozenBounds.maxZ : Math.max(..._zs)+2;
+  const cs=cellSize;
+  const totalW=(maxX-minX+1)*cs, totalH=(maxZ-minZ+1)*cs;
+  const baseX=(W-totalW)/2+panX, baseZ=(H-totalH)/2+panY;
+  function cellPos(gx,gz){return{px:baseX+(gx-minX)*cs,py:baseZ+(gz-minZ)*cs}}
+
+  ctx.fillStyle="#0d1117"; ctx.fillRect(0,0,W,H);
+
+  // Entity size lookup: worldId -> Map<"srcX,srcZ" -> sizeBytes>
+  // Used to draw density indicators on cells. Key is the SOURCE region coordinate
+  // (before world offset), since w.entities stores original file coords.
+  const entitySzMap = {};
+  worlds.forEach(w => {
+    const m = new Map();
+    (w.entities || []).forEach(e => { if((e.sizeBytes||0) > 0) m.set(`${e.x},${e.z}`, e.sizeBytes); });
+    entitySzMap[w.id] = m;
+  });
+
+  for(let gx=minX;gx<=maxX;gx++){
+    for(let gz=minZ;gz<=maxZ;gz++){
+      const k=`${gx},${gz}`,{px,py}=cellPos(gx,gz);
+      const wids=cellMap[k], world=wids?worlds.find(w=>w.id===wids[0]):null;
+      const isOverlap=overlaps.has(k), isOrigin=gx===0&&gz===0;
+      ctx.strokeStyle="#21262d"; ctx.lineWidth=1;
+      if(isOverlap){
+        ctx.fillStyle="#3d1f0055"; ctx.fillRect(px,py,cs,cs);
+        ctx.strokeStyle="#f59e0b88"; ctx.strokeRect(px+.5,py+.5,cs-1,cs-1);
+        if(cs>=18){ctx.fillStyle="#f59e0b";ctx.font=`${Math.max(10,cs*.35)}px monospace`;
+          ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("⚠",px+cs/2,py+cs/2);}
+      } else if(world){
+        const isDragging=dragState&&dragState.worldId===world.id;
+        const isHovered=removeMode&&hoverCell&&hoverCell.gx===gx&&hoverCell.gz===gz;
+        ctx.fillStyle=isHovered?"#5a1a1a":isDragging?world.color.bg+"55":world.color.dim; ctx.fillRect(px,py,cs,cs);
+        ctx.strokeStyle=isHovered?"#f85149":isDragging?world.color.bg:world.color.bg+"88"; ctx.strokeRect(px+.5,py+.5,cs-1,cs-1);
+        // Red X overlay on hover in remove mode
+        if(isHovered&&cs>=14){
+          ctx.fillStyle="#f85149cc"; ctx.font=`bold ${Math.max(10,cs*.5)}px monospace`;
+          ctx.textAlign="center"; ctx.textBaseline="middle";
+          ctx.fillText("✕",px+cs/2,py+cs/2);
+        }
+        // Entity density bar at the bottom of the cell
+        // Source coord reversal: srcX = gx - effectiveOx (ox without originX)
+        {
+          const effOx = (isDragging ? dragState.ox+dragState.previewDx : world.ox);
+          const effOz = (isDragging ? dragState.oz+dragState.previewDz : world.oz);
+          const entSz = (entitySzMap[world.id]||new Map()).get(`${gx-effOx},${gz-effOz}`) || 0;
+          if(entSz > 0) {
+            // Three density levels: low (<200KB), medium (200-500KB), high (>500KB)
+            const ratio = entSz >= 500*1024 ? 0.62 : entSz >= 200*1024 ? 0.40 : 0.20;
+            const barH  = Math.max(2, Math.round(cs * ratio));
+            // Amber fill scaled by density
+            const alpha = entSz >= 500*1024 ? "99" : entSz >= 200*1024 ? "77" : "55";
+            ctx.fillStyle = "#f59e0b" + alpha;
+            ctx.fillRect(px+1, py+cs-barH, cs-2, barH);
+            // Bright top edge line
+            ctx.fillStyle = "#f59e0b";
+            ctx.fillRect(px+1, py+cs-barH, cs-2, 1);
+          }
+        }
+        // Small world-color pip in top-left corner (replaces centre dot)
+        if(cs>=16){
+          const pip=Math.max(3, Math.round(cs*.14));
+          ctx.fillStyle=world.color.bg+"cc";
+          ctx.fillRect(px+2, py+2, pip, pip);
+        }
+        if(cs>=28){ctx.fillStyle=world.color.bg+"cc";ctx.font=`${Math.max(8,cs*.2)}px monospace`;
+          ctx.textAlign="center";ctx.textBaseline="middle";
+          // Shift label up slightly to avoid overlap with entity bar
+          const labelY = py + cs*0.42;
+          ctx.fillText(`${gx},${gz}`,px+cs/2,labelY);}
+      } else {
+        ctx.fillStyle=isOrigin?"#30363d22":"#0d1117"; ctx.fillRect(px,py,cs,cs);
+        ctx.strokeRect(px+.5,py+.5,cs-1,cs-1);
+        if(isOrigin&&cs>=20){ctx.fillStyle="#484f58";ctx.font=`${Math.max(8,cs*.22)}px monospace`;
+          ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("0,0",px+cs/2,py+cs/2);}
+      }
+    }
+  }
+
+  // Axes
+  const ax=cellPos(0,minZ).px, ay=cellPos(minX,0).py;
+  ctx.setLineDash([3,4]); ctx.strokeStyle="#30363d"; ctx.lineWidth=1;
+  if(ax>0&&ax<W){ctx.beginPath();ctx.moveTo(ax,0);ctx.lineTo(ax,H);ctx.stroke();}
+  if(ay>0&&ay<H){ctx.beginPath();ctx.moveTo(0,ay);ctx.lineTo(W,ay);ctx.stroke();}
+  ctx.setLineDash([]);
+
+  // Draw the draggable origin crosshair ─────────────────────────────────────
+  const {px:opx,py:opy}=cellPos(originX,originZ);
+  const ocx=opx+cs/2, ocy=opy+cs/2, arm=Math.max(10,cs*0.7);
+  const inView=ocx>-arm&&ocx<W+arm&&ocy>-arm&&ocy<H+arm;
+  if(inView){
+    ctx.save();
+    ctx.strokeStyle="#f59e0b"; ctx.lineWidth=2; ctx.setLineDash([]);
+    // crosshair arms
+    ctx.beginPath(); ctx.moveTo(ocx-arm,ocy); ctx.lineTo(ocx+arm,ocy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ocx,ocy-arm); ctx.lineTo(ocx,ocy+arm); ctx.stroke();
+    // centre dot
+    ctx.fillStyle="#f59e0b";
+    ctx.beginPath(); ctx.arc(ocx,ocy,3,0,Math.PI*2); ctx.fill();
+    // label
+    if(cs>=20){
+      ctx.fillStyle="#f59e0b"; ctx.font="bold 9px monospace";
+      ctx.textAlign="left"; ctx.textBaseline="bottom";
+      const lbl=`✛ ${originX},${originZ}`;
+      ctx.fillText(lbl, ocx+6, ocy-4);
+    }
+    ctx.restore();
+  }
+
+  const step=Math.max(1,Math.floor(4/(cs/32)));
+  ctx.fillStyle="#484f58"; ctx.font="9px monospace";
+  ctx.textAlign="center";
+  for(let gx=minX;gx<=maxX;gx+=step){const{px}=cellPos(gx,minZ);if(px>20&&px<W-20)ctx.fillText(String(gx),px+cs/2,12);}
+  ctx.textAlign="right";
+  for(let gz=minZ;gz<=maxZ;gz+=step){const{py}=cellPos(minX,gz);if(py>10&&py<H-10)ctx.fillText(String(gz),28,py+cs/2+3);}
+
+  const ow=document.getElementById("overlap-warn");
+  if(overlaps.size>0){
+    ow.style.background="#2d1a00"; ow.style.border="1px solid var(--warn)"; ow.style.color="#fcd34d";
+    ow.textContent=`⚠ ${overlaps.size} overlapping region(s) — reposition worlds to resolve before executing.`;
+  } else if(placed.length>0){
+    ow.style.background="#0a2010"; ow.style.border="1px solid #238636"; ow.style.color="var(--green)";
+    ow.textContent="✓ No overlaps — all regions are in unique positions.";
+  } else {
+    ow.style.background="transparent"; ow.style.border="1px solid transparent"; ow.style.color="transparent";
+    ow.textContent=" "; // non-breaking space keeps height stable
+  }
+
+  document.getElementById("grid-info").textContent=`${placed.length} regions · ${worlds.length} world(s) · drag to pan · scroll to zoom`;
+  // Entity bar legend (only when at least one world has entity data)
+  const anyEntities = worlds.some(w => (w.entities||[]).some(e => (e.sizeBytes||0)>0));
+  const leg = document.getElementById("entity-legend");
+  if(leg) leg.style.display = anyEntities ? "flex" : "none";
+  canvas._gridMeta={cellPos,minX,maxX,minZ,maxZ,cs};
+}
+
+// ─── Canvas event handling ────────────────────────────────────────────────────
+function canvasToCell(e){
+  const rect=canvas.getBoundingClientRect(), mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  if(!canvas._gridMeta) return null;
+  const{cellPos,minX,maxX,minZ,maxZ,cs}=canvas._gridMeta;
+  for(let gx=minX;gx<=maxX;gx++)for(let gz=minZ;gz<=maxZ;gz++){
+    const{px,py}=cellPos(gx,gz);
+    if(mx>=px&&mx<px+cs&&my>=py&&my<py+cs) return{gx,gz};
+  }
+  return null;
+}
+function isNearOrigin(e){
+  if(!canvas._gridMeta) return false;
+  const{cellPos,cs}=canvas._gridMeta;
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  const{px,py}=cellPos(originX,originZ);
+  const ocx=px+cs/2, ocy=py+cs/2, arm=Math.max(10,cs*0.7)+4;
+  return mx>=ocx-arm&&mx<=ocx+arm&&my>=ocy-arm&&my<=ocy+arm;
+}
+function toggleRemoveMode(){
+  removeMode = !removeMode;
+  const btn = document.getElementById("remove-tool-btn");
+  btn.classList.toggle("remove-active", removeMode);
+  hoverCell = null; isErasing = false;
+  canvas.style.cursor = removeMode ? "crosshair" : "default";
+  renderGrid();
+  setStatus(removeMode
+    ? "Remove mode — click or drag to erase regions from the import"
+    : "Remove mode off");
+}
+
+function removeCell(gx, gz){
+  const w = worldAtCell(gx, gz);
+  if(!w) return;
+  const srcX = gx - w.ox, srcZ = gz - w.oz;
+  w.regions = w.regions.filter(r => !(r.x===srcX && r.z===srcZ));
+  w.entities = (w.entities||[]).filter(e => !(e.x===srcX && e.z===srcZ));
+  w.poi      = (w.poi||[])     .filter(p => !(p.x===srcX && p.z===srcZ));
+  if(w.regions.length === 0){
+    worlds = worlds.filter(x => x.id !== w.id);
+    if(worlds.length === 0){ removeMode=false; document.getElementById("remove-tool-btn").classList.remove("remove-active"); }
+  } else {
+    w.bounds = getBounds(w.regions);
+  }
+  renderSidebar(); renderGrid(); renderCmds();
+}
+
+function worldAtCell(gx,gz){
+  const hit=getAllPlaced().find(c=>c.x===gx&&c.z===gz);
+  return hit?worlds.find(w=>w.id===hit.wid):null;
+}
+canvas.addEventListener("mousedown",e=>{
+  if(e.button!==0) return;
+  // Escape key or right-click exits remove mode
+  if(removeMode){
+    const cell=canvasToCell(e);
+    if(cell && worldAtCell(cell.gx,cell.gz)){
+      isErasing=true;
+      removeCell(cell.gx, cell.gz);
+    }
+    return;
+  }
+  // Origin crosshair drag takes priority
+  if(isNearOrigin(e)){
+    isDraggingOrigin=true;
+    canvas.style.cursor="crosshair"; return;
+  }
+  const cell=canvasToCell(e);
+  if(cell){const w=worldAtCell(cell.gx,cell.gz);
+    if(w){
+      // Freeze the bounding box at drag start so the grid frame doesn't resize during drag
+      const _placed=getAllPlaced();
+      const _xs=_placed.map(c=>c.x), _zs=_placed.map(c=>c.z);
+      const frozenBounds={
+        minX:Math.min(..._xs)-2, maxX:Math.max(..._xs)+2,
+        minZ:Math.min(..._zs)-2, maxZ:Math.max(..._zs)+2,
+      };
+      dragState={worldId:w.id,startMx:e.clientX,startMy:e.clientY,ox:w.ox,oz:w.oz,previewDx:0,previewDz:0,frozenBounds};
+      canvas.style.cursor="grabbing"; return;}}
+  isPanning=true; panStart={mx:e.clientX,my:e.clientY,px:panX,py:panY};
+  canvas.style.cursor="grabbing";
+});
+window.addEventListener("mousemove",e=>{
+  if(removeMode){
+    const cell=canvasToCell(e);
+    const prev=hoverCell;
+    hoverCell = cell || null;
+    if(isErasing && cell && worldAtCell(cell.gx,cell.gz)){
+      removeCell(cell.gx,cell.gz);
+    } else if(!cell && prev || cell && (!prev || cell.gx!==prev.gx || cell.gz!==prev.gz)){
+      renderGrid(); // redraw hover highlight
+    }
+    canvas.style.cursor = (cell && worldAtCell(cell.gx,cell.gz)) ? "crosshair" : "default";
+    return;
+  }
+  if(isDraggingOrigin){
+    const cell=canvasToCell(e);
+    if(cell){originX=cell.gx; originZ=cell.gz; updateOriginDisplay(); renderGrid(); renderCmds();}
+    return;
+  }
+  if(dragState){
+    const dx=Math.round((e.clientX-dragState.startMx)/cellSize);
+    const dz=Math.round((e.clientY-dragState.startMy)/cellSize);
+    // Update preview only — don't write to w.ox/w.oz until drop
+    if(dx!==dragState.previewDx || dz!==dragState.previewDz){
+      dragState.previewDx=dx; dragState.previewDz=dz;
+      renderGrid(); // lightweight: no sidebar/cmd re-render during drag
+    }
+    return;
+  }
+  if(isPanning&&panStart){panX=panStart.px+(e.clientX-panStart.mx); panY=panStart.py+(e.clientY-panStart.my); renderGrid(); return;}
+  const cell=canvasToCell(e), tip=document.getElementById("coord-tooltip");
+  if(cell){
+    const w=worldAtCell(cell.gx,cell.gz);
+    tip.style.display="block"; tip.style.left=(e.clientX+14)+"px"; tip.style.top=(e.clientY+14)+"px";
+    tip.textContent=w?`r.${cell.gx}.${cell.gz}.mca · ${w.name}`:`r.${cell.gx}.${cell.gz}.mca (empty)`;
+  } else tip.style.display="none";
+});
+window.addEventListener("mouseup",()=>{
+  isErasing=false;
+  if(dragState){
+    // Commit the previewed position to the world object on drop
+    const w=worlds.find(w=>w.id===dragState.worldId);
+    if(w){ w.ox=dragState.ox+dragState.previewDx; w.oz=dragState.oz+dragState.previewDz; }
+    dragState=null;
+    renderSidebar(); renderGrid(); renderCmds(); // one full refresh on drop
+  }
+  isPanning=false; panStart=null; isDraggingOrigin=false; canvas.style.cursor="default";
+});
+window.addEventListener("keydown",e=>{
+  if(e.key==="Escape" && removeMode){ toggleRemoveMode(); }
+});
+canvas.addEventListener("wheel",e=>{e.preventDefault(); zoom(e.deltaY<0?1:-1);},{passive:false});
+function updateOriginDisplay(){
+  document.getElementById("origin-coords").textContent=`✛ ${originX}, ${originZ}`;
+}
+function resetOrigin(){
+  originX=0; originZ=0; updateOriginDisplay(); renderGrid(); renderCmds();
+  setStatus("Origin reset to 0, 0");
+}
+function zoom(dir){
+  const sizes=[2,3,4,6,8,12,16,20,24,32,40,50,64];
+  const idx=sizes.indexOf(cellSize);
+  cellSize=sizes[Math.max(0,Math.min(sizes.length-1,idx+dir))];
+  document.getElementById("zoom-label").textContent=Math.round(cellSize/32*100)+"%";
+  renderGrid();
+}
+function resetView(){panX=0;panY=0;cellSize=32;renderGrid();}
+window.addEventListener("resize",renderGrid);
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+function renderSidebar(){
+  const list=document.getElementById("worlds-list");
+  list.innerHTML="";
+  worlds.forEach(w=>{
+    const card=document.createElement("div");
+    card.className="world-card";
+    card.style.borderColor=w.color.bg+"55";
+    card.innerHTML=`
+      <div class="world-card-top">
+        <div class="world-dot" style="background:${w.color.bg}"></div>
+        <div class="world-name" style="color:${w.color.bg}" title="${esc(w.name)}">${esc(w.name)}</div>
+        <button class="world-del" onclick="removeWorld(${w.id})">×</button>
+      </div>
+      <div class="world-meta">Regions: <span>${w.regions.length}</span> &nbsp; Offset X: <span>${w.ox>=0?"+":""}${w.ox}</span> Z: <span>${w.oz>=0?"+":""}${w.oz}</span></div>
+      <div class="world-offset">
+        <span class="offset-label">X</span>
+        <input class="offset-input" type="number" value="${w.ox}" onchange="setOffset(${w.id},'ox',this.value)"/>
+        <span class="offset-label">Z</span>
+        <input class="offset-input" type="number" value="${w.oz}" onchange="setOffset(${w.id},'oz',this.value)"/>
+      </div>`;
+    list.appendChild(card);
+  });
+}
+function setOffset(id,axis,val){
+  const w=worlds.find(w=>w.id===id);
+  if(w){w[axis]=parseInt(val)||0; renderSidebar(); renderGrid(); renderCmds();}
+}
+
+// ─── Command output ───────────────────────────────────────────────────────────
+function buildCmd(srcDir,from,to,destDir,subfolder){
+  const baseDir = destDir || "new_world\\region";
+  // For entities/poi: replace the trailing 'region' segment with the subfolder name
+  let d = baseDir;
+  if (subfolder && subfolder !== 'region') {
+    d = baseDir.replace(/([\/\\])region([\/\\]?)$/, '$1' + subfolder + '$2');
+    if (d === baseDir) d = baseDir.replace(/region$/, subfolder); // no trailing slash
+  }
+  if(fmt==="powershell") return `Copy-Item "${srcDir}\\${from}" "${d}\\${to}"`;
+  if(fmt==="bash") return `cp "${srcDir.replace(/\\/g,"/")}/${from}" "${d.replace(/\\/g,"/")}/${to}"`;
+  return `copy "${srcDir}\\${from}" "${d}\\${to}"`;
+}
+function getOps(){
+  // For each selected region file, also pull along any matching entities/ and poi/
+  // files from the same world — same filename = same region coordinate = same offset.
+  const ops = [];
+  worlds.forEach(w => {
+    const sf = w.subfolders || {};
+    // Build lookup sets for fast existence check
+    const entityFiles = new Set((w.entities||[]).map(e => e.file));
+    const poiFiles    = new Set((w.poi||[]).map(p => p.file));
+
+    w.regions.forEach(r => {
+      const fromFile = `r.${r.x}.${r.z}.mca`;
+      const toFile   = `r.${r.x+w.ox-originX}.${r.z+w.oz-originZ}.mca`;
+
+      // Always emit the region op
+      ops.push({ world:w.name, color:w.color, srcDir:w.dir, subfolder:'region',
+        needsNbtPatch:true, from:fromFile, to:toFile });
+
+      // Entities — emit if the matching file exists in this world's entities/ folder
+      if (sf.entities && entityFiles.has(fromFile)) {
+        ops.push({ world:w.name, color:w.color, srcDir:sf.entities, subfolder:'entities',
+          needsNbtPatch:true, from:fromFile, to:toFile });
+      }
+
+      // POI — emit if the matching file exists in this world's poi/ folder
+      if (sf.poi && poiFiles.has(fromFile)) {
+        ops.push({ world:w.name, color:w.color, srcDir:sf.poi, subfolder:'poi',
+          needsNbtPatch:false, from:fromFile, to:toFile });
+      }
+    });
+  });
+  return ops;
+}
+function renderCmds(){
+  const ops=getOps(), dest=document.getElementById("destPath").value.trim()||"new_world\\region";
+  const box=document.getElementById("cmd-list");
+  if(!ops.length){box.innerHTML='<span style="color:var(--dim)">Commands will appear here…</span>';return;}
+  box.innerHTML=ops.map(op=>`
+    <div>
+      <div class="cmd-comment"># ${esc(op.world)} · ${op.from} → ${op.to}</div>
+      <div class="cmd-line">${esc(buildCmd(op.srcDir,op.from,op.to,dest,op.subfolder))}</div>
+    </div>`).join("");
+  document.getElementById("exec-btn").disabled=!document.getElementById("destPath").value.trim();
+}
+document.getElementById("destPath").addEventListener("input",renderCmds);
+function setFmt(f){
+  fmt=f;
+  ["powershell","bash","cmd"].forEach(t=>{
+    document.getElementById(`fmt-${t}`).className="fmt-tab"+(t===f?" active":"");
+  });
+  renderCmds();
+}
+function copyAll(){
+  const dest=document.getElementById("destPath").value.trim()||"new_world\\region";
+  const text=getOps().map(op=>buildCmd(op.srcDir,op.from,op.to,dest)).join("\n");
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn=document.getElementById("copy-btn");
+    btn.textContent="✓ Copied!"; btn.classList.add("ok");
+    setTimeout(()=>{btn.textContent="Copy All"; btn.classList.remove("ok");},2000);
+  });
+}
+
+// ─── Execute flow: preflight → conflict resolution → copy ─────────────────────
+async function execAll(){
+  const dest=document.getElementById("destPath").value.trim();
+  if(!dest){alert("Please enter or browse to a destination folder first.");return;}
+  if(!worlds.length){alert("No worlds loaded.");return;}
+  setStatus("Running pre-flight check…");
+  try {
+    const res=await fetch("/api/preflight",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({worlds: worlds.map(w => {
+      const sf = w.subfolders || {};
+      return {
+        id: w.id, name: w.name, dir: w.dir, ox: w.ox - originX, oz: w.oz - originZ,
+        regions: [
+          // Region files — srcDir is the world's region dir (w.dir)
+          ...w.regions.map(r => ({...r, destSubType: 'region', srcDir: w.dir})),
+          // Entity files — srcDir is the entities subfolder
+          ...(sf.entities ? (w.entities||[]).map(r => ({...r, destSubType:'entities', srcDir:sf.entities})) : []),
+          // POI files — srcDir is the poi subfolder
+          ...(sf.poi ? (w.poi||[]).map(r => ({...r, destSubType:'poi', srcDir:sf.poi})) : []),
+        ]
+      };
+    }), destDir:dest}),
+    });
+    preflightData=await res.json();
+    if(preflightData.error){setStatus("Error: "+preflightData.error);return;}
+
+    if(!preflightData.conflicts.length){
+      // No conflicts — execute immediately
+      setStatus(`No conflicts — copying ${preflightData.clean.length} files…`);
+      await doExecute();
+    } else {
+      showConflictModal();
+    }
+  } catch(e){setStatus("Pre-flight error: "+e.message);}
+}
+
+// ─── Conflict resolution modal ────────────────────────────────────────────────
+function showConflictModal(){
+  resolutions=preflightData.conflicts.map(()=>null);
+  renderConflictSummary();
+  renderConflictList();
+  updateConflictStatus();
+  document.getElementById("conflict-overlay").classList.add("show");
+}
+function closeConflict(){
+  document.getElementById("conflict-overlay").classList.remove("show");
+  preflightData=null; resolutions=[];
+  setStatus("Execution cancelled");
+}
+
+function renderConflictSummary(){
+  const{clean,conflicts,worldConflicts,destConflicts}=preflightData;
+  const sum=document.getElementById("cf-summary");
+  sum.innerHTML=`
+    <div class="cf-stat cf-stat-ok">✓ ${clean.length} clean file${clean.length!==1?"s":""}</div>
+    ${worldConflicts?`<div class="cf-stat cf-stat-warn">⚠ ${worldConflicts} world conflict${worldConflicts!==1?"s":""}</div>`:""}
+    ${destConflicts?`<div class="cf-stat cf-stat-dest">↔ ${destConflicts} destination conflict${destConflicts!==1?"s":""}</div>`:""}
+    <div class="cf-stat cf-stat-skip">${conflicts.length} total to resolve</div>
+  `;
+}
+
+function getOptionBadges(opt,allOptions){
+  const badges=[];
+  const sizes=allOptions.map(o=>o.sizeBytes), mtimes=allOptions.map(o=>o.mtime);
+  const maxSz=Math.max(...sizes), minSz=Math.min(...sizes);
+  const maxTm=Math.max(...mtimes), minTm=Math.min(...mtimes);
+  const uniqueSizes=new Set(sizes).size>1, uniqueTimes=new Set(mtimes).size>1;
+  if(uniqueSizes&&opt.sizeBytes===maxSz) badges.push({label:"LARGEST",cls:"badge-largest"});
+  else if(uniqueSizes&&opt.sizeBytes===minSz) badges.push({label:"SMALLEST",cls:"badge-smallest"});
+  else if(!uniqueSizes) badges.push({label:"SAME SIZE",cls:"badge-same"});
+  if(uniqueTimes&&opt.mtime===maxTm) badges.push({label:"NEWEST",cls:"badge-newest"});
+  else if(uniqueTimes&&opt.mtime===minTm) badges.push({label:"OLDEST",cls:"badge-oldest"});
+  return badges;
+}
+
+function renderConflictList(){
+  const list=document.getElementById("cf-list");
+  list.innerHTML="";
+  preflightData.conflicts.forEach((conflict,ci)=>{
+    const res=resolutions[ci];
+    const isResolved=res!==null&&res!=="skip", isSkip=res==="skip";
+    const borderCls=isSkip?"skipped":isResolved?"resolved":"";
+    const badgeCls=isSkip?"res-skipped":isResolved?"res-resolved":"res-unresolved";
+    const badgeTxt=isSkip?"SKIP":isResolved?"RESOLVED":"UNRESOLVED";
+    const n=conflict.options.length;
+    const gridCls=n>=4?"n4":n===3?"n3":n===2?"n2":"n2";
+    const div=document.createElement("div");
+    div.className=`cf-card ${borderCls}`;
+    div.id=`cflct-${ci}`;
+    div.innerHTML=`
+      <div class="cf-card-hdr">
+        <div class="cf-dest-file" title="${esc(conflict.destFile)}">${esc(conflict.destFile)}</div>
+        <span class="cf-res-badge ${badgeCls}" id="resbadge-${ci}">${badgeTxt}</span>
+      </div>
+      <div class="cf-options ${gridCls}">
+        ${conflict.options.map((opt,oi)=>renderOptionCard(ci,oi,opt,conflict.options)).join("")}
+      </div>
+      <div class="cf-skip-row">
+        <button class="skip-btn${isSkip?" active":""}" id="skip-${ci}"
+          onclick="setResolution(${ci},'skip')">Skip this conflict</button>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+function renderOptionCard(ci,oi,opt,allOptions){
+  const color=opt.isExisting?"#8b949e":getWorldColor(opt.worldId).bg;
+  const badges=getOptionBadges(opt,allOptions);
+  const keepLabel=opt.isExisting?"✓ Keep existing":"✓ Keep this";
+  const existingCls=opt.isExisting?"existing-card":"";
+  const existingTag=opt.isExisting?'<span class="opt-exist-tag">EXISTING</span>':"";
+  return `
+    <div class="opt-card ${existingCls}" id="opt-${ci}-${oi}" onclick="setResolution(${ci},${oi})">
+      <div class="opt-hdr">
+        <div class="opt-dot" style="background:${color}"></div>
+        <div class="opt-world" style="color:${color}" title="${esc(opt.worldName)}">${esc(opt.worldName)}</div>
+        ${existingTag}
+      </div>
+      <div class="opt-srcfile" title="${esc(opt.srcFile)}">${esc(opt.srcFile)}</div>
+      <div class="opt-size">${formatSize(opt.sizeBytes)}</div>
+      <div class="opt-date">${formatDate(opt.mtime)}</div>
+      <div class="opt-badges">${badges.map(b=>`<span class="opt-badge ${b.cls}">${b.label}</span>`).join("")}</div>
+      <button class="keep-btn" onclick="event.stopPropagation();setResolution(${ci},${oi})">${keepLabel}</button>
+    </div>`;
+}
+
+// Set resolution for a single conflict
+function setResolution(ci,choice){
+  resolutions[ci]=choice;
+  const conflict=preflightData.conflicts[ci];
+  const card=document.getElementById(`cflct-${ci}`);
+
+  // Update option card states
+  conflict.options.forEach((_,oi)=>{
+    const optCard=document.getElementById(`opt-${ci}-${oi}`);
+    if(!optCard) return;
+    optCard.classList.remove("selected","rejected");
+    if(choice==="skip") optCard.classList.add("rejected");
+    else if(oi===choice) optCard.classList.add("selected");
+    else optCard.classList.add("rejected");
+  });
+
+  // Update skip button
+  const skipBtn=document.getElementById(`skip-${ci}`);
+  if(skipBtn) skipBtn.classList.toggle("active",choice==="skip");
+
+  // Update card border class
+  card.classList.remove("resolved","skipped");
+  if(choice==="skip") card.classList.add("skipped");
+  else if(choice!==null) card.classList.add("resolved");
+
+  // Update resolution badge
+  const badge=document.getElementById(`resbadge-${ci}`);
+  if(badge){
+    const isResolved=choice!==null, isSkip=choice==="skip";
+    badge.className="cf-res-badge "+(isSkip?"res-skipped":isResolved?"res-resolved":"res-unresolved");
+    badge.textContent=isSkip?"SKIP":isResolved?"RESOLVED":"UNRESOLVED";
+  }
+
+  updateConflictStatus();
+}
+
+// Bulk resolve all conflicts using a strategy
+function bulkResolve(strategy){
+  preflightData.conflicts.forEach((conflict,ci)=>{
+    const opts=conflict.options;
+    let choice=null;
+    if(strategy==="skip"){
+      choice="skip";
+    } else if(strategy==="newer"){
+      const maxTm=Math.max(...opts.map(o=>o.mtime));
+      const idx=opts.findIndex(o=>o.mtime===maxTm);
+      choice=idx>=0?idx:"skip";
+    } else if(strategy==="larger"){
+      const maxSz=Math.max(...opts.map(o=>o.sizeBytes));
+      const idx=opts.findIndex(o=>o.sizeBytes===maxSz);
+      choice=idx>=0?idx:"skip";
+    } else if(strategy==="smaller"){
+      const minSz=Math.min(...opts.map(o=>o.sizeBytes));
+      const idx=opts.findIndex(o=>o.sizeBytes===minSz);
+      choice=idx>=0?idx:"skip";
+    } else if(strategy==="first"){
+      // First non-existing source world option
+      const idx=opts.findIndex(o=>!o.isExisting);
+      choice=idx>=0?idx:0;
+    } else if(strategy==="last"){
+      // Last non-existing source world option
+      let idx=-1;
+      for(let i=opts.length-1;i>=0;i--){if(!opts[i].isExisting){idx=i;break;}}
+      choice=idx>=0?idx:opts.length-1;
+    } else if(strategy==="existing"){
+      // Keep the existing destination file
+      const idx=opts.findIndex(o=>o.isExisting);
+      choice=idx>=0?idx:"skip"; // if no existing, skip
+    }
+    if(choice!==null) setResolution(ci,choice);
+  });
+}
+
+function updateConflictStatus(){
+  const resolved=resolutions.filter(r=>r!==null).length;
+  const total=preflightData.conflicts.length;
+  const skipped=resolutions.filter(r=>r==="skip").length;
+  const kept=resolutions.filter(r=>r!==null&&r!=="skip").length;
+  const allResolved=resolved===total;
+
+  // Progress bar
+  const pct=total>0?(resolved/total*100):100;
+  document.getElementById("cf-progress-bar").style.width=pct+"%";
+
+  // Status text
+  const remaining=total-resolved;
+  document.getElementById("cf-status").textContent=allResolved
+    ?`All resolved — ${kept} to copy, ${skipped} to skip`
+    :`${remaining} conflict${remaining!==1?"s":""} still unresolved`;
+
+  // Execute button
+  const execBtn=document.getElementById("cf-exec-btn");
+  execBtn.disabled=!allResolved;
+  const totalCopies=(preflightData.clean.length)+kept;
+  execBtn.textContent=allResolved
+    ?`⚡ Execute — ${totalCopies} file${totalCopies!==1?"s":""}${skipped?`, ${skipped} skipped`:""}`
+    :`⚡ Execute (${remaining} unresolved)`;
+}
+
+// Build final ops list from preflight data + resolutions, then run
+async function doExecute(){
+  const dest=document.getElementById("destPath").value.trim();
+  const ops=[];
+
+  const pathSep = dest.includes('\\') ? '\\' : '/';
+  const destParent = dest.substring(0, dest.lastIndexOf(pathSep));
+  function siblingDir(sub) { return destParent + pathSep + sub; }
+
+  // Clean files — always copy
+  for(const c of preflightData.clean){
+    const destDir2 = c.destSubType ? siblingDir(c.destSubType) : null;
+    ops.push({from:c.srcFile, to:c.destFile, srcDir:c.srcDir,
+      subfolder: c.subfolder || 'region',
+      needsNbtPatch: (c.subfolder || 'region') !== 'poi',
+      ...(destDir2 ? {destDir: destDir2} : {})});
+  }
+
+  // Resolved conflicts
+  preflightData.conflicts.forEach((conflict,ci)=>{
+    const res=resolutions[ci];
+    if(res==="skip"||res===null) return;
+    const opt=conflict.options[res];
+    const destDir2=conflict.destSubType?siblingDir(conflict.destSubType):null;
+    if(opt.isExisting){
+      ops.push({from:opt.srcFile,to:conflict.destFile,srcDir:opt.srcDir,keepExisting:true,
+        subfolder:conflict.subfolder||'region',needsNbtPatch:(conflict.subfolder||'region')!=='poi',...(destDir2?{destDir:destDir2}:{})});
+    } else {
+      ops.push({from:opt.srcFile,to:conflict.destFile,srcDir:opt.srcDir,
+        subfolder:conflict.subfolder||'region',needsNbtPatch:(conflict.subfolder||'region')!=='poi',...(destDir2?{destDir:destDir2}:{})});
+    }
+  });
+
+  document.getElementById("conflict-overlay").classList.remove("show");
+  setStatus(`Copying ${ops.length} files…`);
+
+  try {
+    const res=await fetch("/api/execute",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ops,destDir:dest}),
+    });
+    const data=await res.json();
+    showResult(data,dest);
+    const skippedCount=preflightData?resolutions.filter(r=>r==="skip").length:0;
+    setStatus(data.errors===0
+      ?`✓ Done — ${data.done-data.keptExisting} copied, ${data.keptExisting} kept existing, ${skippedCount} skipped`
+      :`⚠ ${data.errors} error(s) — check results`);
+  } catch(e){setStatus("Execute error: "+e.message);}
+}
+
+
+// ─── Result modal ─────────────────────────────────────────────────────────────
+function showResult(data,dest){
+  const errors=data.errors||0, kept=data.keptExisting||0;
+  const copied=data.done-kept-errors;
+  const skipped=preflightData?resolutions.filter(r=>r==="skip").length:0;
+
+  document.getElementById("result-title").textContent=
+    errors===0?"✅ Complete":` ⚠ Completed with ${errors} error${errors!==1?"s":""}`;
+  document.getElementById("result-title").style.color=errors===0?"var(--green)":"var(--warn)";
+
+  document.getElementById("result-summary").innerHTML=`
+    <span style="color:var(--green)">✓ ${copied} file${copied!==1?"s":""} copied</span><br>
+
+    ${kept?`<span style="color:var(--blue)">↔ ${kept} file${kept!==1?"s":""} kept existing</span><br>`:""}
+    ${skipped?`<span style="color:var(--muted)">⊘ ${skipped} file${skipped!==1?"s":""} skipped by choice</span><br>`:""}
+    ${errors?`<span style="color:var(--red)">✗ ${errors} error${errors!==1?"s":""}</span><br>`:""}
+  `;
+
+  const list=document.getElementById("result-list");
+  // Only show errors + kept in detail; successful copies would flood the list
+  const notable=data.results.filter(r=>!r.ok||r.kept);
+  if(notable.length){
+    list.innerHTML=notable.map(r=>
+      r.kept?`<div class="res-kept">↔ ${esc(r.file)} (kept existing)</div>`
+            :`<div class="res-err">✗ ${esc(r.file)} — ${esc(r.error||"unknown error")}</div>`
+    ).join("");
+  } else {
+    list.innerHTML=`<div style="color:var(--dim);font-size:11px">All ${copied} files copied successfully — no issues to report.</div>`;
+  }
+
+  if(errors===0){
+    const openBtn=document.createElement("button");
+    openBtn.className="tb-btn"; openBtn.style.cssText="width:100%;margin-bottom:10px";
+    openBtn.textContent="📂 Open destination folder";
+    openBtn.onclick=()=>fetch("/api/open-folder",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dir:dest})});
+    list.prepend(openBtn);
+  }
+
+  document.getElementById("result-overlay").classList.add("show");
+}
+function closeResult(){document.getElementById("result-overlay").classList.remove("show");}
+
+// ─── Add World modal ──────────────────────────────────────────────────────────
+function openModal(){
+  pendingRegions=null;
+  document.getElementById("modal-name").value="";
+  document.getElementById("modal-path").value="";
+  document.getElementById("modal-detected").textContent="—";
+  document.getElementById("modal-overlay").classList.add("show");
+  setTimeout(()=>document.getElementById("modal-name").focus(),50);
+}
+function closeModal(){document.getElementById("modal-overlay").classList.remove("show");}
+
+async function browseSource(){
+  try{
+    const hint=document.getElementById("modal-path").value.trim()||null;
+    const res=await fetch(browseUrl(hint));
+    const data=await res.json();
+    if(data.path){recordBrowse(data.path); document.getElementById("modal-path").value=data.path; await _doScan();}
+    else setStatus("No folder selected");
+  }catch(e){setStatus("Browse error: "+e.message);}
+}
+async function browseDest(){
+  try{
+    const hint=document.getElementById("destPath").value.trim()||null;
+    const res=await fetch(browseUrl(hint));
+    const data=await res.json();
+    if(data.path){recordBrowse(data.path); document.getElementById("destPath").value=data.path; renderCmds();}
+  }catch(e){setStatus("Browse error: "+e.message);}
+}
+
+let scanTimeout=null;
+function scanPath(){clearTimeout(scanTimeout); scanTimeout=setTimeout(_doScan,400);}
+async function _doScan(){
+  const p=document.getElementById("modal-path").value.trim();
+  const det=document.getElementById("modal-detected");
+  if(!p){det.textContent="—"; pendingRegions=null; return;}
+  det.textContent="Scanning…"; det.style.color="var(--muted)";
+  try{
+    const res=await fetch(`/api/scan?path=${encodeURIComponent(p)}`);
+    const data=await res.json();
+    if(data.error){det.textContent="✗ "+data.error; det.style.color="var(--red)"; pendingRegions=null;}
+    else{
+      det.textContent=`✓ ${data.count} region files found`; det.style.color="var(--green)";
+      pendingRegions={dir:data.dir,regions:data.regions};
+      if(!document.getElementById("modal-name").value.trim()){
+        const parts=p.replace(/\\/g,"/").split("/");
+        // Try to grab the world name (usually 2-3 levels up from "region" folder)
+        document.getElementById("modal-name").value=parts[parts.length-3]||parts[parts.length-1]||"World";
+      }
+    }
+  }catch(e){det.textContent="✗ Scan error"; det.style.color="var(--red)"; pendingRegions=null;}
+}
+function confirmAdd(){
+  if(!pendingRegions){alert("Please select a valid region folder first.");return;}
+  const name=document.getElementById("modal-name").value.trim()||`World ${worlds.length+1}`;
+  addWorld(name,pendingRegions.dir,pendingRegions.regions);
+  closeModal();
+}
+
+
+// ─── DESTINATION PICKER ───────────────────────────────────────────────────────
+let destPickerData    = null;   // { root, worlds }
+let destPickerRoot    = null;
+let destSelectedWorld = null;   // the world object the user clicked
+let destAddToGrid     = false;  // checkbox state
+let destScanCache     = {};     // regionDir → scanned regions array (avoid re-scanning)
+
+// ── Open / close ──────────────────────────────────────────────────────────────
+async function openDestPicker() {
+  document.getElementById("dest-overlay").classList.add("show");
+  document.getElementById("dest-world-list").innerHTML =
+    '<div style="padding:30px;text-align:center;color:var(--dim);font-size:11px">Loading worlds…</div>';
+  hideDestAnalysis();
+  destSelectedWorld = null;
+  destAddToGrid = false;
+  document.getElementById("dest-add-row").classList.remove("checked");
+  document.getElementById("dest-add-cb").textContent = "";
+  document.getElementById("dest-confirm-btn").disabled = true;
+  document.getElementById("dest-footer-info").textContent = "Select a world above";
+
+  // Resolve the local .minecraft/saves path first
+  try {
+    const r = await fetch("/api/local-mc-path");
+    const d = await r.json();
+    destPickerRoot = d.path;
+    document.getElementById("dest-root-path").textContent = destPickerRoot;
+    if (!d.exists) {
+      document.getElementById("dest-world-list").innerHTML =
+        '<div style="padding:20px;text-align:center;color:var(--warn);font-size:11px">⚠ Default .minecraft folder not found at ' + esc(destPickerRoot) + '<br>Use Change… to browse manually.</div>';
+      return;
+    }
+    await loadDestWorlds(destPickerRoot);
+  } catch(e) {
+    document.getElementById("dest-world-list").innerHTML =
+      '<div style="padding:20px;text-align:center;color:var(--red);font-size:11px">✗ ' + esc(e.message) + '</div>';
+  }
+}
+
+function closeDestPicker() {
+  document.getElementById("dest-overlay").classList.remove("show");
+}
+
+async function changeDestRoot() {
+  try {
+    const res = await fetch(browseUrl(destPickerRoot));
+    const d = await res.json();
+    if (d.path) {
+      recordBrowse(d.path);
+      destPickerRoot = d.path;
+      document.getElementById("dest-root-path").textContent = destPickerRoot;
+      hideDestAnalysis();
+      destSelectedWorld = null;
+      document.getElementById("dest-confirm-btn").disabled = true;
+      await loadDestWorlds(destPickerRoot);
+    }
+  } catch(e) { setStatus("Browse error: " + e.message); }
+}
+
+function openDestFolderInExplorer() {
+  if (!destPickerRoot) return;
+  fetch("/api/open-folder", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dir: destPickerRoot }) });
+}
+
+// ── Load worlds ───────────────────────────────────────────────────────────────
+async function loadDestWorlds(root) {
+  try {
+    const res = await fetch("/api/list-saves?root=" + encodeURIComponent(root));
+    destPickerData = await res.json();
+    if (destPickerData.error) {
+      document.getElementById("dest-world-list").innerHTML =
+        '<div style="padding:20px;text-align:center;color:var(--red);font-size:11px">✗ ' + esc(destPickerData.error) + '</div>';
+      return;
+    }
+    renderDestList();
+  } catch(e) {
+    document.getElementById("dest-world-list").innerHTML =
+      '<div style="padding:20px;text-align:center;color:var(--red);font-size:11px">✗ ' + esc(e.message) + '</div>';
+  }
+}
+
+// ── Render world rows ─────────────────────────────────────────────────────────
+function renderDestList() {
+  if (!destPickerData) return;
+  const filter = document.getElementById("dest-filter").value.trim().toLowerCase();
+  const ws = destPickerData.worlds.filter(w => !filter || w.name.toLowerCase().includes(filter));
+  const list = document.getElementById("dest-world-list");
+  if (!ws.length) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--dim);font-size:11px">No matching worlds</div>';
+    return;
+  }
+  list.innerHTML = ws.map(w => {
+    const sel = destSelectedWorld && destSelectedWorld.name === w.name;
+    const isEmpty = !w.hasRegion || w.totalFiles === 0;
+    const rowCls = (sel ? "selected " : "") + (isEmpty ? "empty-world" : "");
+    const tagCls = w.totalFiles > 0 ? "tag-ok" : "tag-none";
+    const tagLbl = !w.hasRegion ? "no regions" : w.totalFiles + " region" + (w.totalFiles !== 1 ? "s" : "");
+    const totalMB = w.totalBytes >= 1048576 ? (w.totalBytes/1048576).toFixed(1) + " MB"
+      : w.totalBytes > 0 ? Math.round(w.totalBytes/1024).toLocaleString() + " KB" : "—";
+    const dateLbl = w.mtime ? new Date(w.mtime).toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"}) : "—";
+    return '<div class="dw-row ' + rowCls + '" data-world="' + esc(w.name) + '" title="' + esc(w.worldDir) + '">'
+      + '<div class="dw-radio"><div class="dw-radio-dot"></div></div>'
+      + '<div class="dw-radio"><div class="dw-radio-dot"></div></div>'
+      + '<div class="dw-name">' + esc(w.name) + '</div>'
+      + '<span class="iw-tag ' + tagCls + '">' + tagLbl + '</span>'
+      + '<div class="dw-meta"><strong>' + totalMB + '</strong> · ' + dateLbl + '</div>'
+      + '</div>';
+  }).join("");
+}
+
+// ── Event delegation for dim chip clicks in import modal ──────────────────────
+document.addEventListener("click", function(e) {
+  const chip = e.target.closest(".dim-chip");
+  if (!chip || !chip.dataset.world || !chip.dataset.dim) return;
+  e.stopPropagation();
+  selectedDims[chip.dataset.world] = chip.dataset.dim;
+  renderImportList();
+});
+
+// ── Event delegation for dest world rows (avoids inline onclick quote issues) ──
+document.addEventListener("click", function(e) {
+  const row = e.target.closest(".dw-row");
+  if (!row || !row.dataset.world) return;
+  if (row.closest("#dest-world-list")) selectDestWorld(row.dataset.world);
+});
+
+// ── Select a world & run conflict analysis ────────────────────────────────────
+async function selectDestWorld(name) {
+  if (!destPickerData) return;
+  destSelectedWorld = destPickerData.worlds.find(w => w.name === name) || null;
+  if (!destSelectedWorld) return;
+  renderDestList(); // re-render to show selection
+
+  // Work out what destination filenames our current placement would produce
+  const incomingFiles = getOps().map(op => op.to);
+
+  if (incomingFiles.length === 0) {
+    showDestOk("No worlds are loaded in the placement tool yet — add worlds to the grid first, then pick a destination.");
+    document.getElementById("dest-confirm-btn").disabled = false;
+    updateDestFooter();
+    return;
+  }
+
+  // If the destination world has no region folder, no conflicts possible
+  if (!destSelectedWorld.regionDir) {
+    showDestOk("This world has no existing region folder — all " + incomingFiles.length + " files will be written fresh, no overwrites.");
+    showDestAddRow();
+    document.getElementById("dest-confirm-btn").disabled = false;
+    updateDestFooter();
+    return;
+  }
+
+  // Ask server for which of our incoming filenames already exist in the dest
+  showDestAnalysisLoading();
+  try {
+    const res = await fetch("/api/dest-conflicts", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ destRegionDir: destSelectedWorld.regionDir, destFiles: incomingFiles })
+    });
+    const data = await res.json();
+
+    if (data.conflictCount === 0) {
+      showDestOk(
+        "✓ No conflicts — all " + data.total + " incoming file" + (data.total !== 1 ? "s" : "") +
+        " are new to this world. Nothing will be overwritten."
+      );
+    } else {
+      const pct = Math.round(data.conflictCount / data.total * 100);
+      showDestWarn(
+        "⚠️ " + data.conflictCount + " of " + data.total + " files will overwrite existing chunks",
+        pct + "% of your incoming regions already exist in “" + destSelectedWorld.name + "” and will be replaced. " +
+        "You can resolve these individually in the conflict step after clicking Execute, " +
+        "or add this world to the placement grid below to reposition your imports first."
+      );
+    }
+    showDestAddRow();
+    document.getElementById("dest-confirm-btn").disabled = false;
+    updateDestFooter();
+  } catch(e) {
+    showDestOk("⚠ Could not analyse conflicts: " + e.message);
+    document.getElementById("dest-confirm-btn").disabled = false;
+    updateDestFooter();
+  }
+}
+
+// ── Analysis display helpers ──────────────────────────────────────────────────
+function hideDestAnalysis() {
+  document.getElementById("dest-warn-box").style.display = "none";
+  document.getElementById("dest-ok-box").style.display = "none";
+  document.getElementById("dest-add-row").style.display = "none";
+}
+function showDestAnalysisLoading() {
+  hideDestAnalysis();
+  document.getElementById("dest-ok-box").style.display = "block";
+  document.getElementById("dest-ok-text").textContent = "Analysing conflicts…";
+}
+function showDestWarn(title, detail) {
+  document.getElementById("dest-warn-box").style.display = "block";
+  document.getElementById("dest-ok-box").style.display = "none";
+  document.getElementById("dest-warn-title").textContent = title;
+  document.getElementById("dest-warn-detail").textContent = detail;
+}
+function showDestOk(msg) {
+  document.getElementById("dest-ok-box").style.display = "block";
+  document.getElementById("dest-warn-box").style.display = "none";
+  document.getElementById("dest-ok-text").textContent = msg;
+}
+function showDestAddRow() {
+  if (!destSelectedWorld) return;
+  const row = document.getElementById("dest-add-row");
+  row.style.display = "block";
+  document.getElementById("dest-add-title").textContent =
+    'Also add “' + destSelectedWorld.name + '” to the placement grid';
+}
+function toggleDestAdd() {
+  destAddToGrid = !destAddToGrid;
+  const row = document.getElementById("dest-add-row");
+  row.classList.toggle("checked", destAddToGrid);
+  document.getElementById("dest-add-cb").textContent = destAddToGrid ? "✓" : "";
+}
+function updateDestFooter() {
+  if (!destSelectedWorld) {
+    document.getElementById("dest-footer-info").textContent = "Select a world above";
+    return;
+  }
+  const regionPath = destSelectedWorld.regionDir ||
+    (destSelectedWorld.worldDir + (navigator.platform.includes("Win") ? "\region" : "/region"));
+  document.getElementById("dest-footer-info").textContent = "→ " + regionPath;
+}
+
+// ── Confirm: set destination + optionally add world to grid ───────────────────
+async function confirmDestPicker() {
+  if (!destSelectedWorld) return;
+
+  // Build the destination region path
+  const sep = destSelectedWorld.worldDir.indexOf("\\") !== -1 ? "\\" : "/";
+  const regionPath = destSelectedWorld.regionDir || (destSelectedWorld.worldDir + sep + "region");
+
+  // Set destination input
+  document.getElementById("destPath").value = regionPath;
+  renderCmds();
+
+  // Optionally scan & add to grid
+  if (destAddToGrid && destSelectedWorld.regionDir) {
+    try {
+      // Use cached scan result if available
+      let regions = destScanCache[destSelectedWorld.regionDir];
+      if (!regions) {
+        const res = await fetch("/api/scan?path=" + encodeURIComponent(destSelectedWorld.regionDir));
+        const data = await res.json();
+        if (!data.error) {
+          regions = data.regions;
+          destScanCache[destSelectedWorld.regionDir] = regions;
+        }
+      }
+      if (regions && regions.length) {
+        const alreadyLoaded = worlds.find(w => w.name === destSelectedWorld.name);
+        if (!alreadyLoaded) {
+          addWorld(destSelectedWorld.name, destSelectedWorld.regionDir, regions);
+          setStatus('Destination set to "' + destSelectedWorld.name + '" — world added to grid');
+        } else {
+          setStatus('Destination set to "' + destSelectedWorld.name + '" (already on grid)');
+        }
+      }
+    } catch(e) {
+      setStatus('Destination set — could not add to grid: ' + e.message);
+    }
+  } else {
+    setStatus('Destination set to "' + destSelectedWorld.name + '"');
+  }
+
+  closeDestPicker();
+}
+
+// ─── IMPORT FROM SAVES ────────────────────────────────────────────────────────
+let importSavesData = null;
+let importSelected  = new Set();
+let selectedDims = {};  // worldName -> dimId
+let currentSavesRoot = null;
+let sizeFilterEnabled = true;
+let sizeFilterKb = 100;
+
+function getMinBytes() {
+  return sizeFilterEnabled ? sizeFilterKb * 1024 : 0;
+}
+function getActiveDim(world) {
+  if (!world.dimensions || world.dimensions.length === 0) return null;
+  const dimId = selectedDims[world.name];
+  return world.dimensions.find(d => d.id === dimId) || world.dimensions[0] || null;
+}
+function qualifyingCount(world) {
+  if (!world.hasRegion) return 0;
+  const dim = getActiveDim(world);
+  const sizes = dim ? (dim.fileSizes || []) : (world.fileSizes || []);
+  if (!sizeFilterEnabled) return dim ? dim.totalFiles : world.totalFiles;
+  return sizes.filter(s => s >= getMinBytes()).length;
+}
+function skippedCount(world) {
+  const dim = getActiveDim(world);
+  const total = dim ? dim.totalFiles : world.totalFiles;
+  return total - qualifyingCount(world);
+}
+
+function toggleSizeFilter() {
+  sizeFilterEnabled = !sizeFilterEnabled;
+  const btn  = document.getElementById("size-filter-toggle");
+  const wrap = document.getElementById("size-filter-wrap");
+  const inp  = document.getElementById("size-filter-kb");
+  btn.classList.toggle("on", sizeFilterEnabled);
+  wrap.classList.toggle("active", sizeFilterEnabled);
+  inp.disabled = !sizeFilterEnabled;
+  renderImportList();
+}
+
+let sizeDebounce = null;
+function onSizeFilterChange() {
+  const raw = parseFloat(document.getElementById("size-filter-kb").value);
+  sizeFilterKb = isNaN(raw) || raw < 0 ? 0 : raw;
+  clearTimeout(sizeDebounce);
+  sizeDebounce = setTimeout(renderImportList, 250);
+}
+
+async function openImportSaves() {
+  document.getElementById("import-overlay").classList.add("show");
+  document.getElementById("import-world-list").innerHTML = '<div id="import-loading">Loading worlds…</div>';
+  await loadSaves(null);
+}
+function closeImportSaves() {
+  document.getElementById("import-overlay").classList.remove("show");
+}
+async function changeSavesRoot() {
+  try {
+    const hint = currentSavesRoot || null;
+    const res = await fetch(browseUrl(hint));
+    const data = await res.json();
+    if (data.path) { recordBrowse(data.path); await loadSaves(data.path); }
+  } catch(e) { setStatus("Browse error: " + e.message); }
+}
+
+async function loadSaves(root) {
+  const url = "/api/list-saves" + (root ? "?root=" + encodeURIComponent(root) : "");
+  try {
+    const res = await fetch(url);
+    importSavesData = await res.json();
+    if (importSavesData.error) {
+      document.getElementById("import-world-list").innerHTML =
+        '<div style="padding:30px;text-align:center;color:var(--red);font-size:11px">✗ ' + esc(importSavesData.error) + '</div>';
+      return;
+    }
+    currentSavesRoot = importSavesData.root;
+    document.getElementById("import-root-path").textContent = currentSavesRoot;
+    importSelected = new Set(importSavesData.worlds.filter(w => w.hasRegion && w.totalFiles > 0).map(w => w.name));
+    selectedDims = {};
+    importSavesData.worlds.forEach(w => {
+      if (w.dimensions && w.dimensions.length > 0) {
+        const ow = w.dimensions.find(d => d.id === "overworld") || w.dimensions[0];
+        selectedDims[w.name] = ow.id;
+      }
+    });
+    renderImportList();
+  } catch(e) {
+    document.getElementById("import-world-list").innerHTML =
+      '<div style="padding:30px;text-align:center;color:var(--red);font-size:11px">✗ ' + esc(e.message) + '</div>';
+  }
+}
+
+
+function renderVerBadge(world) {
+  if (!world.versionLabel || world.versionLabel === "Unknown") return '';
+  return '<span class="ver-badge" title="Detected version">' + esc(world.versionLabel) + '</span>';
+}
+
+function renderImportList() {
+  if (!importSavesData) return;
+  const filter = document.getElementById("import-filter").value.trim().toLowerCase();
+  const ws = importSavesData.worlds.filter(w => !filter || w.name.toLowerCase().includes(filter));
+  const list = document.getElementById("import-world-list");
+  if (!ws.length) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--dim);font-size:11px">No matching worlds</div>';
+    updateImportFooter(); return;
+  }
+  list.innerHTML = ws.map(w => {
+    const qc = qualifyingCount(w), sk = skippedCount(w);
+    const sel = importSelected.has(w.name);
+    const noReg = !w.hasRegion;
+    const rowCls = (noReg ? "no-region " : "") + (sel ? "selected" : "");
+    const tagCls = qc > 0 ? "tag-ok" : "tag-none"; // tag-none = grey but row still selectable
+    const entCount = (getActiveDim(w)||{entitiesFiles:[]}).entitiesDir ? " +E" : "";
+    const poiCount  = (getActiveDim(w)||{poiDir:[]}).poiDir ? " +P" : "";
+    const tagLbl = !w.hasRegion ? "no region folder"
+      : qc > 0 ? qc + " region" + (qc !== 1 ? "s" : "") + entCount + poiCount
+      : (sizeFilterEnabled ? "all below limit" : "no valid regions");
+    const skipNote = w.hasRegion && sizeFilterEnabled && sk > 0
+      ? '<div class="iw-skip-note">⊘ ' + sk + ' file' + (sk !== 1 ? 's' : '') + ' below ' + sizeFilterKb + ' KB skipped</div>'
+      : "";
+    const totalMB = w.totalBytes >= 1048576 ? (w.totalBytes/1048576).toFixed(1) + " MB"
+      : w.totalBytes > 0 ? Math.round(w.totalBytes/1024).toLocaleString() + " KB" : "—";
+    const dateLbl = w.mtime ? new Date(w.mtime).toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"}) : "—";
+    const safeName = w.name.replace(/'/g, "\\'");
+    const onclk = noReg ? "" : 'onclick="toggleImportWorld(\'' + safeName + '\')"';
+    // Dimension chips
+    let dimChips = '';
+    if (w.dimensions && w.dimensions.length > 1) {
+      const activeDimId = selectedDims[w.name] || 'overworld';
+      dimChips = '<div class="dim-chips">' + w.dimensions.map(d => {
+        const isActive = d.id === activeDimId;
+        const qc = sizeFilterEnabled ? (d.fileSizes||[]).filter(s=>s>=getMinBytes()).length : d.totalFiles;
+        return '<span class="dim-chip' + (isActive?' active':'') + (d.totalFiles===0?' disabled':'')
+          + '" data-world="' + esc(w.name) + '" data-dim="' + d.id + '">'
+          + d.label + ' (' + qc + ')</span>';
+      }).join('') + '</div>';
+    }
+    return '<div class="iw-row ' + rowCls + '" ' + onclk + ' title="' + esc(w.worldDir) + '">'
+      + '<div class="iw-cb">' + (sel ? "✓" : "") + '</div>'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
+      + '<div class="iw-name">' + esc(w.name) + '</div>'
+      + '<span class="iw-tag ' + tagCls + '">' + tagLbl + '</span>'
+      + renderVerBadge(w)
+      + '<div class="iw-meta"><strong>' + totalMB + '</strong> · ' + dateLbl + skipNote + '</div>'
+      + '</div>'
+      + dimChips
+      + '</div>'
+      + '</div>';
+  }).join("");
+  updateImportFooter();
+}
+
+function toggleImportWorld(name) {
+  if (importSelected.has(name)) importSelected.delete(name);
+  else importSelected.add(name);
+  renderImportList();
+}
+function importSelectAll() {
+  if (!importSavesData) return;
+  importSavesData.worlds.filter(w => qualifyingCount(w) > 0).forEach(w => importSelected.add(w.name));
+  renderImportList();
+}
+function importSelectNone() { importSelected.clear(); renderImportList(); }
+function importSelectWithRegion() {
+  importSelected.clear();
+  if (!importSavesData) return;
+  importSavesData.worlds.filter(w => w.hasRegion && w.totalFiles > 0).forEach(w => importSelected.add(w.name));
+  renderImportList();
+}
+
+function updateImportFooter() {
+  if (!importSavesData) return;
+  const sel = importSavesData.worlds.filter(w => importSelected.has(w.name));
+  const totalQ = sel.reduce((a, w) => a + qualifyingCount(w), 0);
+  const totalSk = sel.reduce((a, w) => a + skippedCount(w), 0);
+  const n = sel.length;
+  document.getElementById("import-sel-count").textContent = n + " world" + (n !== 1 ? "s" : "") + " selected";
+  const skipNote = sizeFilterEnabled && totalSk > 0 ? ", " + totalSk + " below " + sizeFilterKb + " KB skipped" : "";
+  document.getElementById("import-footer-info").textContent = n > 0
+    ? totalQ + " region file" + (totalQ !== 1 ? "s" : "") + " to import" + skipNote
+    : "Select worlds above then click Import";
+  const btn = document.getElementById("import-do-btn");
+  btn.disabled = totalQ === 0;
+  btn.textContent = totalQ > 0
+    ? "⬆ Import " + totalQ + " file" + (totalQ !== 1 ? "s" : "") + " from " + n + " world" + (n !== 1 ? "s" : "")
+    : "⬆ Import selected";
+}
+
+async function doImportSaves() {
+  if (!importSavesData) return;
+  const selWorlds = importSavesData.worlds.filter(w => importSelected.has(w.name) && w.hasRegion);
+  if (!selWorlds.length) return;
+  const btn = document.getElementById("import-do-btn");
+  btn.disabled = true; btn.textContent = "Importing…";
+  try {
+    const res = await fetch("/api/import-saves", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        regionDirs: selWorlds.map(w => {
+          const dim = getActiveDim(w);
+          const regionDir = dim ? dim.regionDir : w.regionDir;
+          // Send subfolders object — server uses subs.entities / subs.poi to scan those dirs
+          const subfolders = (dim && dim.subfolders && Object.keys(dim.subfolders).length > 1)
+            ? dim.subfolders
+            : { region: regionDir };
+          const dimLabel = dim && dim.id !== 'overworld' ? ' (' + dim.label + ')' : '';
+          return { regionDir, subfolders, worldName: w.name + dimLabel };
+        }),
+        minSizeBytes: getMinBytes(),
+      })
+    });
+    const data = await res.json();
+    closeImportSaves();
+    let imported = 0, errors = 0, skippedSmall = 0;
+    for (const result of data.results) {
+      if (result.error) { errors++; continue; }
+      if (!result.regions.length) continue;
+      const existing = worlds.find(w => w.name === result.worldName);
+      const srcWorld = importSavesData ? importSavesData.worlds.find(w => w.name === result.worldName.replace(/ \(.*\)$/, "")) : null;
+      const wopts = srcWorld ? {
+        versionLabel: srcWorld.versionLabel,
+        subfolders: result.subfolders || {},
+        entities:   result.entities   || [],
+        poi:        result.poi        || [],
+      } : {};
+      if (existing) {
+        const existingFiles = new Set(existing.regions.map(r => r.file));
+        const newR = result.regions.filter(r => !existingFiles.has(r.file));
+        existing.regions.push(...newR);
+        existing.bounds = getBounds(existing.regions);
+        // Update entities/poi dirs in case they're now available
+        if (result.subfolders) existing.subfolders = result.subfolders;
+        existing.entities = (existing.entities || []).concat(result.entities || []);
+        existing.poi      = (existing.poi      || []).concat(result.poi      || []);
+        imported += newR.length;
+      } else {
+        addWorld(result.worldName, result.regionDir, result.regions, wopts);
+        // Store entities/poi on the world object for use during execute
+        const w = worlds[worlds.length - 1];
+        w.entities = result.entities || [];
+        w.poi = result.poi || [];
+        // subfolders/entities/poi already stored via wopts in addWorld
+        imported += result.regions.length;
+      }
+      skippedSmall += result.skippedSmall || 0;
+    }
+    if (worlds.length > 1) snapAll();
+    const filterNote = sizeFilterEnabled && skippedSmall > 0
+      ? " · " + skippedSmall + " below " + sizeFilterKb + " KB skipped"
+      : "";
+    // Entities and POI automatically follow their matching region files at execute time
+    const entityNote = "";
+    const poiNote    = "";
+    setStatus("Imported " + imported + " region" + (imported !== 1 ? "s" : "") + " from "
+      + data.results.length + " world" + (data.results.length !== 1 ? "s" : "")
+      + entityNote + poiNote + filterNote
+      + (errors ? " · " + errors + " error" + (errors !== 1 ? "s" : "") : ""));
+  } catch(e) {
+    setStatus("Import error: " + e.message);
+    btn.disabled = false; btn.textContent = "⬆ Import selected";
+  }
+}
+
+</script>
+</body>
+</html>
