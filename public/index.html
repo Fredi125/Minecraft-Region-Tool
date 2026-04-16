@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <title>MC Region Placement Tool</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><polygon points='22,7 12,12 12,22 22,17' fill='%235e3a1f'/><polygon points='22,7 12,12 12,14 22,9' fill='%233d6a22'/><polygon points='2,7 12,12 12,22 2,17' fill='%237a4f2e'/><polygon points='2,7 12,12 12,14 2,9' fill='%234a7c2c'/><polygon points='12,2 22,7 12,12 2,7' fill='%235d9438'/><polygon points='7,5.5 9,6.5 8,7 6,6' fill='%236ba83f'/><polygon points='14,6.5 16,7.5 15,8 13,7' fill='%234a7c2c'/><polygon points='11,8.5 13,9.5 12,10 10,9' fill='%236ba83f'/></svg>"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -17,7 +18,8 @@ body{background:var(--bg0);color:var(--text);font-family:'JetBrains Mono','Fira 
 
 /* ─── Toolbar ─── */
 #toolbar{background:var(--bg1);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0}
-#toolbar h1{font-size:13px;color:var(--blue);margin-right:4px;white-space:nowrap}
+#toolbar h1{font-size:13px;color:var(--blue);margin-right:4px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.title-icon{width:18px;height:18px;flex-shrink:0;image-rendering:pixelated}
 .sep{width:1px;height:20px;background:var(--border);flex-shrink:0}
 .tb-btn{padding:4px 11px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text);cursor:pointer;font-family:inherit;font-size:11px;transition:all .12s;white-space:nowrap}
 .tb-btn:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
@@ -333,7 +335,7 @@ body{background:var(--bg0);color:var(--text);font-family:'JetBrains Mono','Fira 
 
 <!-- ── TOOLBAR ── -->
 <div id="toolbar">
-  <h1>🗺 MC Region Tool</h1>
+  <h1><svg class="title-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="22,7 12,12 12,22 22,17" fill="#5e3a1f"/><polygon points="22,7 12,12 12,14 22,9" fill="#3d6a22"/><polygon points="2,7 12,12 12,22 2,17" fill="#7a4f2e"/><polygon points="2,7 12,12 12,14 2,9" fill="#4a7c2c"/><polygon points="12,2 22,7 12,12 2,7" fill="#5d9438"/><polygon points="7,5.5 9,6.5 8,7 6,6" fill="#6ba83f"/><polygon points="14,6.5 16,7.5 15,8 13,7" fill="#4a7c2c"/><polygon points="11,8.5 13,9.5 12,10 10,9" fill="#6ba83f"/></svg> MC Region Tool</h1>
   <div class="sep"></div>
   <span class="dest-label">Destination:</span>
   <input id="destPath" placeholder="new_world/region — paste path or Browse…"/>
