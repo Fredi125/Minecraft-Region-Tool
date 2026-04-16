@@ -20,7 +20,7 @@ body{background:var(--bg0);color:var(--text);font-family:'JetBrains Mono','Fira 
 #toolbar h1{font-size:13px;color:var(--blue);margin-right:4px;white-space:nowrap}
 .sep{width:1px;height:20px;background:var(--border);flex-shrink:0}
 .tb-btn{padding:4px 11px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text);cursor:pointer;font-family:inherit;font-size:11px;transition:all .12s;white-space:nowrap}
-.tb-btn:hover{border-color:var(--blue);color:var(--blue)}
+.tb-btn:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
 .tb-btn:disabled{opacity:.4;cursor:not-allowed}
 .tb-btn.remove-active{border-color:#f85149;color:#f85149;background:#2d1a1a}
 .tb-btn.remove-active:hover{border-color:#ff7b72;color:#ff7b72}
@@ -344,6 +344,7 @@ body{background:var(--bg0);color:var(--text);font-family:'JetBrains Mono','Fira 
   <div class="sep"></div>
   <button class="tb-btn" onclick="snapAll()">Auto-arrange</button>
   <button class="tb-btn" id="remove-tool-btn" onclick="toggleRemoveMode()" title="Click cells to remove them from the import. Hold and drag to erase multiple.">✕ Remove</button>
+  <button class="tb-btn" id="undo-remove-btn" onclick="undoRemove()" disabled title="Nothing to undo">↶ Undo</button>
   <button class="tb-btn" onclick="resetView()">Reset view</button>
 </div>
 
@@ -582,6 +583,9 @@ let dragState = null;
 let removeMode = false;   // eraser tool active
 let hoverCell  = null;    // {gx,gz} — cell under cursor in remove mode
 let isErasing  = false;   // mouse held during remove mode
+let undoStack  = [];      // snapshots of `worlds` taken before each erase session
+let pendingUndoSnapshot = null; // captured at mousedown, committed on mouseup
+const UNDO_STACK_MAX = 20;
 let originX = 0, originZ = 0;  // Minecraft 0,0 in region-grid coords
 let isDraggingOrigin = false;
 // Conflict state
@@ -879,6 +883,32 @@ function removeCell(gx, gz){
   renderSidebar(); renderGrid(); renderCmds();
 }
 
+function snapshotWorlds(){
+  // structuredClone covers all plain-data fields on world objects (regions/entities/poi/color/bounds/subfolders)
+  return structuredClone(worlds);
+}
+function pushUndo(snap){
+  if(!snap) return;
+  undoStack.push(snap);
+  while(undoStack.length > UNDO_STACK_MAX) undoStack.shift();
+  updateUndoBtn();
+}
+function undoRemove(){
+  if(!undoStack.length){ setStatus("Nothing to undo"); return; }
+  worlds = undoStack.pop();
+  updateUndoBtn();
+  renderSidebar(); renderGrid(); renderCmds();
+  setStatus(`Undid last remove (${undoStack.length} step${undoStack.length===1?"":"s"} left)`);
+}
+function updateUndoBtn(){
+  const btn = document.getElementById("undo-remove-btn");
+  if(!btn) return;
+  btn.disabled = undoStack.length === 0;
+  btn.title = undoStack.length
+    ? `Undo last remove — ${undoStack.length} step${undoStack.length===1?"":"s"} available (Ctrl+Z)`
+    : "Nothing to undo";
+}
+
 function worldAtCell(gx,gz){
   const hit=getAllPlaced().find(c=>c.x===gx&&c.z===gz);
   return hit?worlds.find(w=>w.id===hit.wid):null;
@@ -889,6 +919,8 @@ canvas.addEventListener("mousedown",e=>{
   if(removeMode){
     const cell=canvasToCell(e);
     if(cell && worldAtCell(cell.gx,cell.gz)){
+      // Capture pre-erase snapshot once per session; commit on mouseup
+      pendingUndoSnapshot = snapshotWorlds();
       isErasing=true;
       removeCell(cell.gx, cell.gz);
     }
@@ -952,6 +984,7 @@ window.addEventListener("mousemove",e=>{
 });
 window.addEventListener("mouseup",()=>{
   isErasing=false;
+  if(pendingUndoSnapshot){ pushUndo(pendingUndoSnapshot); pendingUndoSnapshot=null; }
   if(dragState){
     // Commit the previewed position to the world object on drop
     const w=worlds.find(w=>w.id===dragState.worldId);
@@ -963,6 +996,11 @@ window.addEventListener("mouseup",()=>{
 });
 window.addEventListener("keydown",e=>{
   if(e.key==="Escape" && removeMode){ toggleRemoveMode(); }
+  if((e.ctrlKey||e.metaKey) && !e.shiftKey && !e.altKey && (e.key==="z"||e.key==="Z")){
+    const tag=(e.target&&e.target.tagName)||"";
+    if(tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT") return;
+    if(undoStack.length){ e.preventDefault(); undoRemove(); }
+  }
 });
 canvas.addEventListener("wheel",e=>{e.preventDefault(); zoom(e.deltaY<0?1:-1);},{passive:false});
 function updateOriginDisplay(){
