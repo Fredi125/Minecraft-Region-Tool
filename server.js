@@ -1,7 +1,7 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execSync, execFileSync } = require("child_process");
 const os = require("os");
 const zlib = require("zlib");
 
@@ -9,7 +9,35 @@ const app = express();
 const PORT = 25599;
 
 app.use(express.json({ limit: "20mb" }));
+
+// ── CSRF / cross-origin guard for /api ───────────────────────────────────────
+// The server binds to 127.0.0.1, but any browser tab on the same machine can
+// still POST to it. Reject requests whose Origin/Referer points anywhere other
+// than our own page. Requests with neither header (curl, etc.) are allowed.
+const ALLOWED_ORIGINS = new Set([
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+]);
+app.use("/api", (req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    if (!ALLOWED_ORIGINS.has(origin)) return res.status(403).json({ error: "Origin not allowed." });
+    return next();
+  }
+  const referer = req.headers.referer;
+  if (referer) {
+    try {
+      if (!ALLOWED_ORIGINS.has(new URL(referer).origin)) return res.status(403).json({ error: "Referer not allowed." });
+    } catch { return res.status(403).json({ error: "Invalid referer." }); }
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, "public")));
+
+// Filename and subfolder whitelists for execute-side validation
+const MCA_NAME = /^r\.(-?\d+)\.(-?\d+)\.mca$/;
+const VALID_SUBFOLDERS = new Set(["region", "entities", "poi"]);
 
 // ── Minecraft version constants ───────────────────────────────────────────────
 // DataVersion values at which coordinate behaviour changed
@@ -130,22 +158,33 @@ let lastBrowsedDir = null;
 
 app.get("/api/browse", (req, res) => {
   const platform = os.platform();
-  // Use caller-supplied hint, then last-browsed, then home directory
-  const startDir = req.query.startPath || lastBrowsedDir || os.homedir();
+  // Use caller-supplied hint, then last-browsed, then home directory.
+  // Coerce to string so a malicious caller can't smuggle non-string types.
+  const startDir = String(req.query.startPath || lastBrowsedDir || os.homedir());
   let selectedPath = null;
   try {
     if (platform === "win32") {
-      // SelectedPath pre-seeds the dialog's initial directory
-      const ps = `Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.Description = 'Select a Minecraft world region folder'; $f.SelectedPath = '${startDir.replace(/'/g, "''")}'; $f.ShowDialog() | Out-Null; Write-Output $f.SelectedPath`;
-      selectedPath = execSync(`powershell -NoProfile -Command "${ps}"`, { timeout: 60000 }).toString().trim();
+      // PowerShell single-quoted string escape: ' → ''
+      const safeStart = startDir.replace(/'/g, "''");
+      const ps = `Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.Description = 'Select a Minecraft world region folder'; $f.SelectedPath = '${safeStart}'; $f.ShowDialog() | Out-Null; Write-Output $f.SelectedPath`;
+      // execFileSync (no shell) means the PS command is passed as a single argv
+      // entry — no outer shell quoting to escape.
+      selectedPath = execFileSync("powershell", ["-NoProfile", "-Command", ps], { timeout: 60000 }).toString().trim();
     } else if (platform === "darwin") {
-      const appleStart = startDir.replace(/'/g, "\'");
-      selectedPath = execSync(`osascript -e 'POSIX path of (choose folder with prompt "Select region folder" default location POSIX file "${appleStart}")'`, { timeout: 60000 }).toString().trim().replace(/\/$/, "");
+      // AppleScript double-quoted string escape: \ → \\, " → \"
+      const ap = startDir.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      const script = `POSIX path of (choose folder with prompt "Select region folder" default location POSIX file "${ap}")`;
+      selectedPath = execFileSync("osascript", ["-e", script], { timeout: 60000 }).toString().trim().replace(/\/$/, "");
     } else {
+      // execFile passes args directly with no shell — no quoting needed.
       try {
-        selectedPath = execSync(`zenity --file-selection --directory --title='Select region folder' --filename='${startDir.replace(/'/g, "\'")}'`, { timeout: 60000 }).toString().trim();
+        selectedPath = execFileSync("zenity", [
+          "--file-selection", "--directory",
+          "--title=Select region folder",
+          `--filename=${startDir}`,
+        ], { timeout: 60000 }).toString().trim();
       } catch {
-        selectedPath = execSync(`kdialog --getexistingdirectory '${startDir.replace(/'/g, "\'")}'`, { timeout: 60000 }).toString().trim();
+        selectedPath = execFileSync("kdialog", ["--getexistingdirectory", startDir], { timeout: 60000 }).toString().trim();
       }
     }
   } catch {
@@ -665,7 +704,8 @@ function patchEntityMcaFile(srcPath, dstPath, srcRX, srcRZ, dstRX, dstRZ) {
 app.post("/api/execute", (req, res) => {
   const { ops, destDir } = req.body;
   if (!ops || !ops.length) return res.status(400).json({ error: "No operations provided." });
-  if (!destDir) return res.status(400).json({ error: "No destination directory." });
+  if (typeof destDir !== "string" || !destDir) return res.status(400).json({ error: "No destination directory." });
+  if (!path.isAbsolute(destDir)) return res.status(400).json({ error: "Destination directory must be an absolute path." });
 
   try { fs.mkdirSync(destDir, { recursive: true }); }
   catch (e) { return res.status(500).json({ error: `Could not create destination: ${e.message}` }); }
@@ -679,11 +719,31 @@ app.post("/api/execute", (req, res) => {
       keptExisting++;
       continue;
     }
+    // Validate op fields: filenames must be plain region names (no slashes,
+    // no traversal), subfolder must be a known sibling, dirs must be absolute.
+    if (typeof op.from !== "string" || typeof op.to !== "string" ||
+        !MCA_NAME.test(op.from) || !MCA_NAME.test(op.to)) {
+      results.push({ file: String(op.to), ok: false, error: "Invalid filename." });
+      errors++; continue;
+    }
+    const subf = op.subfolder || "region";
+    if (!VALID_SUBFOLDERS.has(subf)) {
+      results.push({ file: op.to, ok: false, error: "Invalid subfolder." });
+      errors++; continue;
+    }
+    if (typeof op.srcDir !== "string" || !path.isAbsolute(op.srcDir)) {
+      results.push({ file: op.to, ok: false, error: "Source path must be absolute." });
+      errors++; continue;
+    }
+    if (op.destDir !== undefined && (typeof op.destDir !== "string" || !path.isAbsolute(op.destDir))) {
+      results.push({ file: op.to, ok: false, error: "Destination path must be absolute." });
+      errors++; continue;
+    }
     // Use explicit destDir from op if provided (set by client for entities/poi),
-    // otherwise derive from op.subfolder, otherwise fall back to destDir (region).
+    // otherwise derive from subf, otherwise fall back to destDir (region).
     const effectiveDest = op.destDir ||
-      ((op.subfolder && op.subfolder !== 'region')
-        ? destDir.replace(/([\/\\])region([\/\\]?)$/, '$1' + op.subfolder + '$2').replace(/region$/, op.subfolder)
+      ((subf !== 'region')
+        ? destDir.replace(/([\/\\])region([\/\\]?)$/, '$1' + subf + '$2').replace(/region$/, subf)
         : destDir);
     try { require('fs').mkdirSync(effectiveDest, { recursive: true }); } catch {}
     const src = path.join(op.srcDir, op.from);
@@ -693,7 +753,7 @@ app.post("/api/execute", (req, res) => {
         const mDst = op.to.match(/^r\.([-\d]+)\.([-\d]+)\.mca$/);
         if (mDst) {
           const dstRX = parseInt(mDst[1]), dstRZ = parseInt(mDst[2]);
-          if (op.subfolder === 'entities') {
+          if (subf === 'entities') {
             // Entity files: translate entity Pos by block offset, update Position chunk tag
             const mSrc = op.from.match(/^r\.([-\d]+)\.([-\d]+)\.mca$/);
             if (mSrc) {
@@ -729,12 +789,14 @@ app.post("/api/execute", (req, res) => {
 // ── Open folder in OS file explorer ──────────────────────────────────────────
 app.post("/api/open-folder", (req, res) => {
   const { dir } = req.body;
-  if (!dir) return res.status(400).json({ error: "No dir." });
+  if (typeof dir !== "string" || !dir) return res.status(400).json({ error: "No dir." });
+  if (!path.isAbsolute(dir)) return res.status(400).json({ error: "Absolute path required." });
   try {
     const p = os.platform();
-    if (p === "win32") execSync(`explorer "${dir}"`);
-    else if (p === "darwin") execSync(`open "${dir}"`);
-    else execSync(`xdg-open "${dir}"`);
+    // execFileSync (no shell) prevents `dir` from being interpreted as shell syntax.
+    if (p === "win32") execFileSync("explorer", [dir]);
+    else if (p === "darwin") execFileSync("open", [dir]);
+    else execFileSync("xdg-open", [dir]);
     res.json({ ok: true });
   } catch { res.json({ ok: false }); }
 });
